@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 
-export default function ChaiMakerPage() {
+export default function AdminDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -146,17 +146,17 @@ export default function ChaiMakerPage() {
 
   // Customer Management Table
   const customerManagement = [
-    { name: "John Bike Parts", orders: 10, value: "₹12,000", lastOrder: "09/12/2026", loyalty: "Gold" },
-    { name: "Elite Cycling Co.", orders: 15, value: "₹25,000", lastOrder: "09/11/2026", loyalty: "Platinum" },
+    { name: "John Bike Parts", orders: 10, lastOrder: "09/12/2026", loyalty: "Gold" },
+    { name: "Elite Cycling Co.", orders: 15, lastOrder: "09/11/2026", loyalty: "Platinum" },
   ];
 
   // Earnings Summary Stats
   const statsSummary = {
-    totalSales: "₹125,000",
+    
     totalOrders: "450 orders",
     deliveryShipment: "560 Delivery",
     pendingShipment: "25 orders",
-    avgOrderValue: "₹278/Order",
+    
   };
 
   const todaySettlements = [
@@ -167,10 +167,10 @@ export default function ChaiMakerPage() {
   ];
 
   const historyOrders = [
-    { id: "#10230", customer: "Aarav Mehta", status: "Delivered", date: "09/12/2026 11:20 AM", total: "₹298", items: "2x Classic Masala Chai", customization: "Oat Milk, Low Sugar", office: "Office 402, Floor 4" },
-    { id: "#10231", customer: "Priya Patel", status: "Delivered", date: "09/12/2026 10:45 AM", total: "₹450", items: "1x Saffron Royal Chai, 2x Ginger Chai", customization: "Mild Sugar, Cardamom", office: "Office 512, Floor 5" },
-    { id: "#10232", customer: "Rohan Sharma", status: "Cancelled", date: "09/11/2026 04:15 PM", total: "₹169", items: "1x Ginger (Adrak) Chai", customization: "No Sugar", office: "Office 301, Floor 3" },
-    { id: "#10233", customer: "Karan Johar", status: "Delivered", date: "09/11/2026 02:30 PM", total: "₹596", items: "2x Kashmiri Kahwa, 1x Saffron Royal Chai", customization: "Whole Milk, High Sweetness", office: "Office 508, Floor 5" },
+    { id: "#10230", customer: "Aarav Mehta", status: "Delivered", date: "09/12/2026 11:20 AM", items: "2x Classic Masala Chai", customization: "Oat Milk, Low Sugar", office: "Office 402, Floor 4" },
+    { id: "#10231", customer: "Priya Patel", status: "Delivered", date: "09/12/2026 10:45 AM", items: "1x Saffron Royal Chai, 2x Ginger Chai", customization: "Mild Sugar, Cardamom", office: "Office 512, Floor 5" },
+    { id: "#10232", customer: "Rohan Sharma", status: "Cancelled", date: "09/11/2026 04:15 PM", items: "1x Ginger (Adrak) Chai", customization: "No Sugar", office: "Office 301, Floor 3" },
+    { id: "#10233", customer: "Karan Johar", status: "Delivered", date: "09/11/2026 02:30 PM", items: "2x Kashmiri Kahwa, 1x Saffron Royal Chai", customization: "Whole Milk, High Sweetness", office: "Office 508, Floor 5" },
   ];
 
   // Menu items
@@ -378,7 +378,7 @@ export default function ChaiMakerPage() {
       office: "Office 305, Block C",
       sugar: "Mild Sugar",
       milk: "Organic Oat Milk",
-      price: "₹498",
+      
       img: "https://i.pinimg.com/736x/21/74/32/2174329b8ef1603c1cbc68bd9ef5865a.jpg",
     };
     setIncomingOrder(mockOrderObj);
@@ -638,8 +638,7 @@ export default function ChaiMakerPage() {
         {/* Card action controls */}
         <div className="queue-card-action-bar">
           <div>
-            <span style={{ fontSize: "11px", color: "#888", display: "block" }}>Amount Total</span>
-            <strong style={{ fontSize: "14px", color: "#2c1b0d" }}>{o.total}</strong>
+            {/* Amount Total removed for Brewmaster */}
           </div>
 
           <div style={{ display: "flex", gap: "8px" }}>
@@ -793,14 +792,11 @@ export default function ChaiMakerPage() {
               <button onClick={() => setActiveTab("stock")} className={`menu-icon-btn ${activeTab === "stock" ? "active" : ""}`}>
                 <span className="btn-emoji">📦</span> Stock & Alerts
               </button>
-              <button onClick={() => setActiveTab("earnings")} className={`menu-icon-btn ${activeTab === "earnings" ? "active" : ""}`}>
-                <span className="btn-emoji">💰</span> Earnings & Payout
-              </button>
               <button onClick={() => setActiveTab("history")} className={`menu-icon-btn ${activeTab === "history" ? "active" : ""}`}>
                 <span className="btn-emoji">📜</span> Order History
               </button>
               <button onClick={() => setActiveTab("menu")} className={`menu-icon-btn ${activeTab === "menu" ? "active" : ""}`}>
-                <span className="btn-emoji">🍽️</span> Menu & Pricing
+                <span className="btn-emoji">🍽️</span> Menu Catalog
               </button>
               <button onClick={() => setActiveTab("subs")} className={`menu-icon-btn ${activeTab === "subs" ? "active" : ""}`}>
                 <span className="btn-emoji">📅</span> Subscriptions Due
@@ -882,14 +878,7 @@ export default function ChaiMakerPage() {
 
                 {/* STATS ROW */}
                 <div className="stats-cards-row-new">
-                  <div className="stats-card-item">
-                    <div className="stats-card-title-row">
-                      <span className="stats-icon-circle red-bg">📈</span>
-                      <span>Total Sales</span>
-                    </div>
-                    <h3>{statsSummary.totalSales}</h3>
-                    <span className="stats-percent-tag green">+8% <span style={{ color: "#777" }}>vs month</span></span>
-                  </div>
+                  
 
                   <div className="stats-card-item">
                     <div className="stats-card-title-row">
@@ -918,14 +907,7 @@ export default function ChaiMakerPage() {
                     <span className="stats-percent-tag red">-5% <span style={{ color: "#777" }}>vs month</span></span>
                   </div>
 
-                  <div className="stats-card-item">
-                    <div className="stats-card-title-row">
-                      <span className="stats-icon-circle yellow-bg">💵</span>
-                      <span>AVG Order Value</span>
-                    </div>
-                    <h3>{statsSummary.avgOrderValue}</h3>
-                    <span className="stats-percent-tag green">+5% <span style={{ color: "#777" }}>vs month</span></span>
-                  </div>
+                  
                 </div>
 
                 {/* MIDDLE ROW */}
@@ -959,7 +941,7 @@ export default function ChaiMakerPage() {
                               >
                                 {bar.highlighted && (
                                   <div className="chart-tooltip-bubble">
-                                    Total Revenue<br /><strong>₹150,000</strong>
+                                    
                                   </div>
                                 )}
                               </div>
@@ -983,7 +965,7 @@ export default function ChaiMakerPage() {
                             <th>Customer Name</th>
                             <th>Date</th>
                             <th>Status</th>
-                            <th>Total</th>
+                            
                           </tr>
                         </thead>
                         <tbody>
@@ -997,7 +979,7 @@ export default function ChaiMakerPage() {
                                   {o.status}
                                 </span>
                               </td>
-                              <td>{o.total}</td>
+                              
                             </tr>
                           ))}
                         </tbody>
@@ -1332,7 +1314,7 @@ export default function ChaiMakerPage() {
                   <div style={{ background: "#ffffff", padding: "20px", borderRadius: "24px", border: "1px solid rgba(44, 27, 13, 0.06)", marginBottom: "28px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
                       <span style={{ fontSize: "11px", color: "#666", textTransform: "uppercase", display: "block" }}>💰 Total Inventory Valuation</span>
-                      <strong style={{ fontSize: "24px", color: "#2c1b0d" }}>₹{totalValuation.toLocaleString()}</strong>
+                      
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                       <span style={{ fontSize: "12px", color: "#666" }}>Auto-Alert to Admin (Low Stock)</span>
@@ -1439,8 +1421,8 @@ export default function ChaiMakerPage() {
                                   
                                   {/* Pricing details */}
                                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#888", marginBottom: "12px", padding: "6px 0", borderTop: "1px solid rgba(0,0,0,0.03)", borderBottom: "1px solid rgba(0,0,0,0.03)" }}>
-                                    <span>Rate: ₹{s.unitPrice || 150} / {s.unit || "Kg"}</span>
-                                    <span>Value: <strong>₹{itemValue.toLocaleString()}</strong></span>
+                                    
+                                    
                                   </div>
 
                                   {/* Supplier Detail */}
@@ -1659,22 +1641,22 @@ export default function ChaiMakerPage() {
 
             {activeTab === "earnings" && (() => {
               const transactions = [
-                { id: "TXN-8801", name: "Aarav Mehta", method: "UPI (GPay)", amount: "₹298", time: "10 mins ago", status: "Successful" },
-                { id: "TXN-8802", name: "Priya Patel", method: "Wallet Balance", amount: "₹450", time: "22 mins ago", status: "Successful" },
-                { id: "TXN-8803", name: "Karan Johar", method: "Credit Card", amount: "₹596", time: "1 hour ago", status: "Successful" },
-                { id: "TXN-8804", name: "Rohan Sharma", method: "UPI (PhonePe)", amount: "₹169", time: "3 hours ago", status: "Successful" },
-                { id: "TXN-8805", name: "Sunita Rao", method: "UPI (Paytm)", amount: "₹318", time: "4 hours ago", status: "Successful" },
-                { id: "TXN-8806", name: "Kabir Singh", method: "Wallet Balance", amount: "₹249", time: "Yesterday", status: "Successful" },
+                { id: "TXN-8801", name: "Aarav Mehta", method: "UPI (GPay)", time: "10 mins ago", status: "Successful" },
+                { id: "TXN-8802", name: "Priya Patel", method: "Wallet Balance", time: "22 mins ago", status: "Successful" },
+                { id: "TXN-8803", name: "Karan Johar", method: "Credit Card", time: "1 hour ago", status: "Successful" },
+                { id: "TXN-8804", name: "Rohan Sharma", method: "UPI (PhonePe)", time: "3 hours ago", status: "Successful" },
+                { id: "TXN-8805", name: "Sunita Rao", method: "UPI (Paytm)", time: "4 hours ago", status: "Successful" },
+                { id: "TXN-8806", name: "Kabir Singh", method: "Wallet Balance", time: "Yesterday", status: "Successful" },
               ];
 
               const chartData = [
-                { day: "Mon", val: 60, amount: "₹15,000" },
-                { day: "Tue", val: 80, amount: "₹22,000" },
-                { day: "Wed", val: 45, amount: "₹11,500" },
-                { day: "Thu", val: 95, amount: "₹29,800" },
-                { day: "Fri", val: 70, amount: "₹19,200" },
-                { day: "Sat", val: 30, amount: "₹8,000" },
-                { day: "Sun", val: 90, amount: "₹25,300" },
+                { day: "Mon", val: 60, },
+                { day: "Tue", val: 80, },
+                { day: "Wed", val: 45, },
+                { day: "Thu", val: 95, },
+                { day: "Fri", val: 70, },
+                { day: "Sat", val: 30, },
+                { day: "Sun", val: 90, },
               ];
 
               return (
@@ -1684,12 +1666,12 @@ export default function ChaiMakerPage() {
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px", marginBottom: "28px" }}>
                     <div style={{ background: "#ffffff", padding: "20px", borderRadius: "16px", border: "1px solid rgba(44, 27, 13, 0.04)" }}>
                       <span style={{ fontSize: "11px", color: "#666", display: "block" }}>💰 Total Gross Earnings</span>
-                      <strong style={{ fontSize: "24px", color: "#2c1b0d" }}>₹125,000</strong>
+                      
                       <span style={{ fontSize: "10.5px", color: "#27ae60", display: "block", marginTop: "4px" }}>▲ +14% from last week</span>
                     </div>
                     <div style={{ background: "#ffffff", padding: "20px", borderRadius: "16px", border: "1px solid rgba(44, 27, 13, 0.04)" }}>
                       <span style={{ fontSize: "11px", color: "#666", display: "block" }}>🏦 Pending Payout (Auto-Transfer)</span>
-                      <strong style={{ fontSize: "24px", color: "#2c1b0d" }}>₹18,400</strong>
+                      
                       <span style={{ fontSize: "10.5px", color: "#8a583c", display: "block", marginTop: "4px" }}>Scheduled: Friday, 6:00 PM</span>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", background: "#ffffff", padding: "20px", borderRadius: "16px", border: "1px solid rgba(44, 27, 13, 0.04)" }}>
@@ -1798,7 +1780,7 @@ export default function ChaiMakerPage() {
                   {/* Invoice Modal Overlay */}
                   {activeInvoice && (() => {
                     const cleanId = activeInvoice.id.replace("#", "");
-                    const priceVal = parseFloat(activeInvoice.total.replace("₹", "")) || 0;
+                    
                     const subTotal = (priceVal / 1.05).toFixed(2);
                     const taxVal = (priceVal - subTotal).toFixed(2);
 
@@ -1911,9 +1893,9 @@ export default function ChaiMakerPage() {
                                     <strong style={{ display: "block" }}>{activeInvoice.items}</strong>
                                     <span style={{ fontSize: "11px", color: "#666" }}>Pref: {activeInvoice.customization}</span>
                                   </td>
-                                  <td style={{ padding: "16px", textAlign: "right" }}>₹{subTotal}</td>
+                                  <td></td>
                                   <td style={{ padding: "16px", textAlign: "center" }}>1</td>
-                                  <td style={{ padding: "16px", textAlign: "right", fontWeight: "bold" }}>₹{subTotal}</td>
+                                  <td></td>
                                 </tr>
                               </tbody>
                             </table>
@@ -1931,11 +1913,11 @@ export default function ChaiMakerPage() {
                               <div style={{ fontSize: "12.5px" }}>
                                 <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", color: "#666" }}>
                                   <span>Sub Total:</span>
-                                  <span>₹{subTotal}</span>
+                                  <span></span>
                                 </div>
                                 <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", color: "#666", borderBottom: "1px solid #eee", paddingBottom: "10px" }}>
                                   <span>Tax (GST 5%):</span>
-                                  <span>₹{taxVal}</span>
+                                  <span></span>
                                 </div>
                                 <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "#2c1b0d", color: "#ffffff", borderRadius: "4px", marginTop: "10px", fontWeight: "bold" }}>
                                   <span>Grand Total:</span>
@@ -2225,7 +2207,7 @@ export default function ChaiMakerPage() {
                                   <h4 style={{ fontSize: "14.5px", margin: 0, fontWeight: "bold" }}>
                                     {m.name} {m.isSpecial && <span style={{ fontSize: "10px", background: "rgba(241,196,15,0.2)", color: "#d35400", padding: "2px 6px", borderRadius: "4px", marginLeft: "6px" }}>★ Special</span>}
                                   </h4>
-                                  <strong style={{ fontSize: "14.5px" }}>₹{m.price}</strong>
+                                  
                                 </div>
                                 <p style={{ fontSize: "11.5px", color: "#777", margin: "0 0 10px" }}>{m.desc}</p>
                                 
@@ -2278,7 +2260,7 @@ export default function ChaiMakerPage() {
                               <div style={{ flex: 1 }}>
                                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                                   <strong style={{ fontSize: "12px" }}>{m.name}</strong>
-                                  <span style={{ fontSize: "12px", fontWeight: "bold" }}>₹{m.price}</span>
+                                  
                                 </div>
                                 <span style={{ fontSize: "10px", color: "#777", display: "block" }}>{m.desc.slice(0, 45)}...</span>
                                 {m.isSpecial && <span style={{ fontSize: "8px", background: "#f1c40f", color: "#2c1b0d", padding: "1px 4px", borderRadius: "3px", fontWeight: "bold", display: "inline-block", marginTop: "2px" }}>Today's Special</span>}
@@ -2489,7 +2471,7 @@ export default function ChaiMakerPage() {
                           <div key={i} className="queue-card-detailed-item" style={{ background: "#ffffff", padding: "18px" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                               <strong style={{ fontSize: "14px", color: "#2c1b0d" }}>{c.name}</strong>
-                              <strong style={{ fontSize: "14px", color: "#8a583c" }}>₹{c.price}</strong>
+                              
                             </div>
                             <span style={{ fontSize: "11.5px", color: "#666", display: "block", marginBottom: "10px" }}>📦 Combo items: {c.items}</span>
                             <p style={{ fontSize: "11px", color: "#888", margin: "0 0 10px", fontStyle: "italic" }}>{c.desc}</p>
@@ -2579,7 +2561,7 @@ export default function ChaiMakerPage() {
                                       }
                                     }}
                                   />
-                                  <span>{ad.name} (+₹{ad.price})</span>
+                                  <span>{ad.name} </span>
                                 </label>
                               );
                             })}
@@ -2617,7 +2599,7 @@ export default function ChaiMakerPage() {
                             <div style={{ flex: 1 }}>
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                 <strong style={{ fontSize: "13.5px" }}>{ad.name}</strong>
-                                <strong style={{ fontSize: "13.5px", color: "#2c1b0d" }}>₹{ad.price}</strong>
+                                
                               </div>
                               <p style={{ fontSize: "11px", color: "#777", margin: "4px 0 8px" }}>{ad.desc}</p>
                               
@@ -3158,30 +3140,34 @@ export default function ChaiMakerPage() {
                       <span className="sidebar-order-date">{o.date}</span>
                     </div>
 
-                    {/* Main order info with product image layout */}
-                    <div className="sidebar-card-body-detailed">
-                      <img src={o.img} alt={o.item} className="sidebar-product-img" />
-                      
-                      <div className="sidebar-product-details">
-                        <h4 className="sidebar-product-title">{o.item}</h4>
-                        <span className="sidebar-customer-name">👤 {o.customer}</span>
-                        
-                        {/* Office Number badge */}
-                        <div className="sidebar-office-badge">
-                          🏢 {o.office || "Desk Area"}
-                        </div>
+                                      {/* Main order info with product image layout */}
+                  <div className="sidebar-card-body-detailed">
+                    <img src={o.img} alt={o.item} className="sidebar-product-img" />
+                    
+                    <div className="sidebar-product-details">
+                      <h4 className="sidebar-product-title">{o.item}</h4>
+                      <span className="sidebar-customer-name">👤 {o.customer}</span>
+                    </div>
+                  </div>
 
-                        {/* Extra customizations details */}
-                        <div className="sidebar-extra-details">
-                          <span>Sugar: {o.sugar}</span>
-                          <span>Milk: {o.milk}</span>
-                        </div>
-
-                        <strong className="sidebar-total-amount">{o.total}</strong>
+                  {/* Office Number & Customizations moved below image to save height */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "12px", borderTop: "1px dashed rgba(0,0,0,0.05)", paddingTop: "10px" }}>
+                    <div className="sidebar-office-badge" style={{ margin: 0, flexShrink: 0, display: "flex", alignItems: "flex-start", gap: "4px" }}>
+                      <span style={{ marginTop: "1px" }}>🏢</span>
+                      <div style={{ display: "flex", flexDirection: "column" }}>
+                        {(o.office || "Desk Area").split(',').map((part, i, arr) => (
+                          <span key={i}>{part.trim()}{i !== arr.length - 1 ? ',' : ''}</span>
+                        ))}
                       </div>
                     </div>
+                    
+                    <div className="sidebar-extra-details" style={{ display: "flex", flexDirection: "column", gap: "4px", margin: 0, alignItems: "flex-end", textAlign: "right", fontSize: "10.5px" }}>
+                      <span>Sugar: {o.sugar}</span>
+                      <span>Milk: {o.milk}</span>
+                    </div>
+                  </div>
 
-                    {/* Actions */}
+                  {/* Actions */}
                     <div className="sidebar-card-actions">
                       <button onClick={() => rejectSpecificOrder(o.id)} className="sidebar-action-btn reject">
                         Reject
@@ -3364,7 +3350,7 @@ export default function ChaiMakerPage() {
           top: 0;
           left: 0;
           bottom: 0;
-          width: 260px;
+          width: 20%;
           background: #2c1b0d;
           color: #fdf5e9;
           padding: 40px 24px;
@@ -3395,6 +3381,11 @@ export default function ChaiMakerPage() {
           width: 100%;
           overflow-y: auto;
           max-height: calc(100vh - 180px);
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .sidebar-menu::-webkit-scrollbar {
+          display: none;
         }
 
         .menu-icon-btn {
@@ -3434,12 +3425,12 @@ export default function ChaiMakerPage() {
 
         /* Container main */
         .dashboard-container {
-          margin-left: 260px;
-          margin-right: 320px;
+          margin-left: 20%;
+          margin-right: 20%;
           flex-grow: 1;
-          padding: 40px;
+          padding: 24px;
           box-sizing: border-box;
-          width: calc(100% - 580px);
+          width: 60%;
         }
 
         /* Fixed Right Sidebar for Pending Queue (Detailed cards style) */
@@ -3448,10 +3439,11 @@ export default function ChaiMakerPage() {
           top: 0;
           right: 0;
           bottom: 0;
-          width: 320px;
+          width: 20%;
           background: #ffffff;
           border-left: 1px solid rgba(44, 27, 13, 0.08);
           padding: 40px 24px;
+          box-sizing: border-box;
           display: flex;
           flex-direction: column;
           z-index: 1000;
@@ -3489,6 +3481,16 @@ export default function ChaiMakerPage() {
           gap: 16px;
           overflow-y: auto;
           flex-grow: 1;
+          padding-right: 6px;
+        }
+        .pending-orders-stack::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+        
+        .pending-orders-stack::-webkit-scrollbar-thumb {
+          background-color: rgba(0,0,0,0.15);
+          border-radius: 4px;
         }
 
         .right-sidebar-order-card {
@@ -3536,6 +3538,7 @@ export default function ChaiMakerPage() {
 
         .sidebar-product-details {
           flex-grow: 1;
+          min-width: 0;
         }
 
         .sidebar-product-title {
@@ -3642,6 +3645,7 @@ export default function ChaiMakerPage() {
           font-weight: 900;
           color: #2c1b0d;
           margin: 0;
+          white-space: nowrap;
         }
 
         .header-search-box-wrap {
@@ -4427,3 +4431,4 @@ export default function ChaiMakerPage() {
     </div>
   );
 }
+

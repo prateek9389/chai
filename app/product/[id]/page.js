@@ -108,67 +108,7 @@ export default function ProductDetailPage({ params }) {
   // Active Gallery Media
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
 
-  // Custom Ingredients selection with animation triggers
-  const [customIngredients, setCustomIngredients] = useState([]);
-  const [flyingIngredients, setFlyingIngredients] = useState([]);
-
-  // Sugar and Milk Custom Selection Options
-  const [sugarLevel, setSugarLevel] = useState("normal"); // "none" | "light" | "normal" | "extra"
-  const [milkType, setMilkType] = useState("whole"); // "whole" | "oat" | "almond" | "black"
-
-  const availableIngredients = [
-    { name: "Adrak (Ginger)", icon: "🫚", color: "#e67e22" },
-    { name: "Elaichi (Cardamom)", icon: "🟢", color: "#27ae60" },
-    { name: "Dalchini (Cinnamon)", icon: "🪵", color: "#8a583c" },
-    { name: "Kesar (Saffron)", icon: "🍂", color: "#f1c40f" },
-    { name: "Tulsi Leaves", icon: "🍃", color: "#2ecc71" },
-    { name: "Black Pepper", icon: "🌶️", color: "#e74c3c" },
-  ];
-
-  // Synth sound generator
-  const playPopSound = () => {
-    try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
-      const ctx = new AudioContext();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(350, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.12);
-      
-      gain.gain.setValueAtTime(0.12, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
-      
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      
-      osc.start();
-      osc.stop(ctx.currentTime + 0.12);
-    } catch (e) {
-      console.warn("AudioContext failed to trigger:", e);
-    }
-  };
-
-  const handleToggleIngredient = (ing) => {
-    const isAdded = customIngredients.some((i) => i.name === ing.name);
-    
-    // Play Pop Sound
-    playPopSound();
-
-    if (!isAdded) {
-      // Trigger Added Animation
-      const animationId = Date.now();
-      setFlyingIngredients((prev) => [...prev, { ...ing, id: animationId }]);
-      setTimeout(() => {
-        setFlyingIngredients((prev) => prev.filter((i) => i.id !== animationId));
-      }, 1000);
-      setCustomIngredients((prev) => [...prev, ing]);
-    } else {
-      setCustomIngredients((prev) => prev.filter((i) => i.name !== ing.name));
-    }
-  };
+  const [sugarLevel, setSugarLevel] = useState("with"); // "none" | "with"
 
   const handleNextMedia = () => {
     setActiveMediaIndex((prev) => (prev + 1) % product.gallery.length);
@@ -186,6 +126,7 @@ export default function ProductDetailPage({ params }) {
 
   // Addons Modal State
   const [isAddonModalOpen, setIsAddonModalOpen] = useState(false);
+  const [modalStep, setModalStep] = useState("sugar"); // "sugar" | "addons"
   const [selectedAddons, setSelectedAddons] = useState([]);
 
   // Addon list items
@@ -221,6 +162,7 @@ export default function ProductDetailPage({ params }) {
     if (purchaseType === "subscription") {
       router.push(`/subscribe?productId=${product.id}`);
     } else {
+      setModalStep("sugar");
       setIsAddonModalOpen(true);
     }
   };
@@ -237,7 +179,7 @@ export default function ProductDetailPage({ params }) {
 
   const handleFinishCheckout = () => {
     const addonIds = selectedAddons.map((a) => a.id).join(",");
-    router.push(`/checkout?productId=${product.id}&quantity=${quantity}&addons=${addonIds}&sugar=${sugarLevel}&milk=${milkType}`);
+    router.push(`/checkout?productId=${product.id}&quantity=${quantity}&addons=${addonIds}&sugar=${sugarLevel}`);
     setIsAddonModalOpen(false);
   };
 
@@ -289,20 +231,6 @@ export default function ProductDetailPage({ params }) {
               <button className="carousel-nav-btn right-nav" onClick={handleNextMedia}>
                 ›
               </button>
-
-              {/* Bouncing flying ingredient animations inside the center image container */}
-              {flyingIngredients.map((item) => (
-                <div
-                  key={item.id}
-                  className="bouncing-ingredient-item"
-                  style={{
-                    backgroundColor: item.color,
-                  }}
-                >
-                  <span style={{ fontSize: "20px" }}>{item.icon}</span>
-                  <span style={{ fontSize: "12px", fontWeight: 800 }}>+{item.name}</span>
-                </div>
-              ))}
             </div>
 
             {/* Thumbnail selector */}
@@ -322,79 +250,7 @@ export default function ProductDetailPage({ params }) {
               ))}
             </div>
           </div>
-
-          {/* Column 1: Sidebar Ingredients Customizer (Left) - order: 2 on mobile */}
-          <div className="sidebar-customizer">
-            <h3 className="sidebar-heading">Brew Customizer</h3>
-            <p className="sidebar-sub">Select organic spices to blend directly into your brewing kettle.</p>
-            
-            <div className="ingredients-vertical-list">
-              {availableIngredients.map((ing) => {
-                const isSelected = customIngredients.some((i) => i.name === ing.name);
-                return (
-                  <button
-                    key={ing.name}
-                    onClick={() => handleToggleIngredient(ing)}
-                    className={`ingredient-vertical-btn ${isSelected ? "selected" : ""}`}
-                  >
-                    <span className="swatch-icon-circle" style={{ background: `${ing.color}15`, color: ing.color }}>
-                      {ing.icon}
-                    </span>
-                    <div style={{ textAlign: "left", flexGrow: 1 }}>
-                      <span className="swatch-title">{ing.name}</span>
-                      <span className="swatch-status">{isSelected ? "Added to Kettle" : "Tap to Add"}</span>
-                    </div>
-                    <span className="swatch-checkbox">{isSelected ? "✓" : "+"}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Sugar & Milk Selection Container - order: 3 on mobile */}
-          <div className="customizer-options-row">
-            {/* Sugar selection */}
-            <div style={{ flex: 1 }}>
-              <h4 style={{ fontSize: "13px", fontWeight: 700, marginBottom: "8px", color: "#2c1b0d" }}>Sugar Level</h4>
-              <div className="swatch-selection-row">
-                {[
-                  { value: "none", label: "No Sugar ❌" },
-                  { value: "light", label: "Light 🍬" },
-                  { value: "normal", label: "Normal 🍬🍬" },
-                  { value: "extra", label: "Extra 🍬🍬" },
-                ].map((s) => (
-                  <button
-                    key={s.value}
-                    onClick={() => setSugarLevel(s.value)}
-                    className={`swatch-select-item ${sugarLevel === s.value ? "selected" : ""}`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Milk customizer */}
-            <div style={{ flex: 1 }}>
-              <h4 style={{ fontSize: "13px", fontWeight: 700, marginBottom: "8px", color: "#2c1b0d" }}>Milk Type</h4>
-              <div className="swatch-selection-row">
-                {[
-                  { value: "whole", label: "Whole 🥛" },
-                  { value: "oat", label: "Oat 🌾" },
-                  { value: "almond", label: "Almond 🥜" },
-                  { value: "black", label: "Black ☕️" },
-                ].map((m) => (
-                  <button
-                    key={m.value}
-                    onClick={() => setMilkType(m.value)}
-                    className={`swatch-select-item ${milkType === m.value ? "selected" : ""}`}
-                  >
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          {/* Sugar selection is now inside the add-to-cart/buy-now modal flow */}
 
           {/* Column 3: Details (Right) - order: 4 on mobile */}
           <div className="nordic-details">
@@ -557,7 +413,7 @@ export default function ProductDetailPage({ params }) {
         <Footer />
       </div>
 
-      {/* Add-ons Quick Add Popup Modal */}
+      {/* Add-ons & Sugar Selection Popup Modal */}
       {isAddonModalOpen && (
         <div className="modal-backdrop">
           <div className="modal-content">
@@ -565,58 +421,96 @@ export default function ProductDetailPage({ params }) {
               ✕
             </button>
 
-            <h3 style={{ fontSize: "20px", fontWeight: 800, color: "#2c1b0d", marginBottom: "8px", textAlign: "center" }}>
-              Quick Add Add-ons
-            </h3>
-            <p style={{ fontSize: "13px", color: "#666", textAlign: "center", marginBottom: "24px" }}>
-              Chai is incomplete without hot cookies and butter toasts. Complete your brew!
-            </p>
+            {modalStep === "sugar" ? (
+              <div style={{ textAlign: "center", padding: "10px" }}>
+                <h3 style={{ fontSize: "22px", fontWeight: 800, color: "#2c1b0d", marginBottom: "8px" }}>
+                  Customize Sugar
+                </h3>
+                <p style={{ fontSize: "14px", color: "#666", marginBottom: "30px" }}>
+                  Please select your preferred sugar level for this brew:
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "15px" }}>
+                  <button
+                    onClick={() => {
+                      setSugarLevel("none");
+                      setModalStep("addons");
+                    }}
+                    className="sugar-modal-btn"
+                  >
+                    <span style={{ fontSize: "32px", display: "block", marginBottom: "10px" }}>❌</span>
+                    <span style={{ fontSize: "15px", fontWeight: 700 }}>No Sugar</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSugarLevel("with");
+                      setModalStep("addons");
+                    }}
+                    className="sugar-modal-btn"
+                  >
+                    <span style={{ fontSize: "32px", display: "block", marginBottom: "10px" }}>🍬</span>
+                    <span style={{ fontSize: "15px", fontWeight: 700 }}>With Sugar</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <h3 style={{ fontSize: "20px", fontWeight: 800, color: "#2c1b0d", marginBottom: "8px", textAlign: "center" }}>
+                  Quick Add Add-ons
+                </h3>
+                <p style={{ fontSize: "13px", color: "#666", textAlign: "center", marginBottom: "24px" }}>
+                  Chai is incomplete without hot cookies and butter toasts. Complete your brew!
+                </p>
 
-            {/* Addons Grid */}
-            <div className="addons-grid">
-              {addons.map((addon) => {
-                const isSelected = selectedAddons.some((a) => a.id === addon.id);
-                return (
-                  <div key={addon.id} className={`addon-card ${isSelected ? "selected" : ""}`}>
-                    <img src={addon.image} alt={addon.name} className="addon-img" />
-                    <div style={{ padding: "12px", display: "flex", flexDirection: "column", flexGrow: 1 }}>
-                      <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#2c1b0d", flexGrow: 1 }}>{addon.name}</h4>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px" }}>
-                        <span style={{ fontSize: "13px", fontWeight: 800, color: "#8a583c" }}>{addon.price}</span>
-                        <button
-                          onClick={() => toggleAddon(addon)}
-                          style={{
-                            background: isSelected ? "#5c7a4d" : "#2c1b0d",
-                            color: "#ffffff",
-                            border: "none",
-                            borderRadius: "999px",
-                            padding: "4px 10px",
-                            fontSize: "11px",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                        >
-                          {isSelected ? "Added ✓" : "Add +"}
-                        </button>
+                {/* Addons Grid */}
+                <div className="addons-grid">
+                  {addons.map((addon) => {
+                    const isSelected = selectedAddons.some((a) => a.id === addon.id);
+                    return (
+                      <div key={addon.id} className={`addon-card ${isSelected ? "selected" : ""}`}>
+                        <img src={addon.image} alt={addon.name} className="addon-img" />
+                        <div style={{ padding: "12px", display: "flex", flexDirection: "column", flexGrow: 1 }}>
+                          <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#2c1b0d", flexGrow: 1 }}>{addon.name}</h4>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px" }}>
+                            <span style={{ fontSize: "13px", fontWeight: 800, color: "#8a583c" }}>{addon.price}</span>
+                            <button
+                              onClick={() => toggleAddon(addon)}
+                              style={{
+                                background: isSelected ? "#5c7a4d" : "#2c1b0d",
+                                color: "#ffffff",
+                                border: "none",
+                                borderRadius: "999px",
+                                padding: "4px 10px",
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {isSelected ? "Added ✓" : "Add +"}
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                    );
+                  })}
+                </div>
 
-            {/* Checkout Finalize */}
-            <div style={{ borderTop: "1px solid rgba(0,0,0,0.06)", marginTop: "24px", paddingTop: "20px", textAlign: "center" }}>
-              <button onClick={handleFinishCheckout} className="btn-finalize-order">
-                Continue to Checkout
-              </button>
-            </div>
+                {/* Checkout Finalize */}
+                <div style={{ borderTop: "1px solid rgba(0,0,0,0.06)", marginTop: "24px", paddingTop: "20px", textAlign: "center", display: "flex", gap: "12px", justifyContent: "center" }}>
+                  <button onClick={() => setModalStep("sugar")} className="btn-finalize-order" style={{ background: "#f5f5f7", color: "#2c1b0d", border: "1.5px solid rgba(44, 27, 13, 0.15)" }}>
+                    ← Back
+                  </button>
+                  <button onClick={handleFinishCheckout} className="btn-finalize-order" style={{ flexGrow: 1 }}>
+                    Continue to Checkout
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
 
       {/* Styled JSX */}
-      <style>{`
+      <style suppressHydrationWarning>{`
         .product-page-container-full {
           width: 100%;
           padding: 110px 40px 30px;
@@ -643,13 +537,12 @@ export default function ProductDetailPage({ params }) {
           font-weight: 600;
         }
 
-        /* 3-Column Grid Layout on Desktop */
+        /* 2-Column Grid Layout on Desktop */
         .nordic-layout-container {
           display: grid;
-          grid-template-columns: 290px 1.4fr 1fr;
+          grid-template-columns: 1.4fr 1fr;
           grid-template-areas:
-            "sidebar gallery details"
-            "sidebar gallery sugar-milk";
+            "gallery details";
           gap: 20px;
           background: #ffffff;
           border-radius: 24px;
@@ -659,95 +552,11 @@ export default function ProductDetailPage({ params }) {
           box-sizing: border-box;
         }
 
-        /* Column 1: Sidebar Customizer */
-        .sidebar-customizer {
-          grid-area: sidebar;
-          background: #fbf9f6;
-          border-radius: 16px;
-          padding: 24px;
-          border: 1px solid rgba(0,0,0,0.04);
-          display: flex;
-          flex-direction: column;
-          align-self: start;
-        }
-
-        .sidebar-heading {
-          font-size: 16px;
-          font-weight: 800;
-          color: #2c1b0d;
-          margin-bottom: 6px;
-        }
-
-        .sidebar-sub {
-          font-size: 12px;
-          color: #777;
-          line-height: 1.4;
-          margin-bottom: 20px;
-        }
-
-        .ingredients-vertical-list {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-
-        .ingredient-vertical-btn {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          background: #ffffff;
-          border: 1.5px solid rgba(44, 27, 13, 0.08);
-          border-radius: 12px;
-          padding: 12px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .ingredient-vertical-btn:hover {
-          border-color: rgba(44, 27, 13, 0.25);
-        }
-
-        .ingredient-vertical-btn.selected {
-          border-color: #2c1b0d;
-          background: rgba(44, 27, 13, 0.02);
-        }
-
-        .swatch-icon-circle {
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 16px;
-          flex-shrink: 0;
-        }
-
-        .swatch-title {
-          display: block;
-          font-size: 13px;
-          font-weight: 700;
-          color: #2c1b0d;
-        }
-
-        .swatch-status {
-          display: block;
-          font-size: 10.5px;
-          color: #777;
-          margin-top: 2px;
-        }
-
-        .swatch-checkbox {
-          font-size: 12px;
-          font-weight: 700;
-          color: #8a583c;
-        }
-
-        /* Sugar & Milk selection blocks */
+        /* Sugar selection */
         .swatch-selection-row {
           display: grid;
           grid-template-columns: repeat(2, 1fr);
-          gap: 6px;
+          gap: 8px;
           margin-top: 8px;
         }
 
@@ -1413,6 +1222,23 @@ export default function ProductDetailPage({ params }) {
             grid-template-columns: 1fr;
             gap: 12px;
           }
+        }
+
+        .sugar-modal-btn {
+          background: #ffffff;
+          border: 2px solid rgba(44, 27, 13, 0.08);
+          border-radius: 12px;
+          padding: 20px;
+          font-size: 14px;
+          font-weight: 700;
+          cursor: pointer;
+          color: #2c1b0d;
+          transition: all 0.2s ease;
+        }
+        .sugar-modal-btn:hover {
+          border-color: #2c1b0d;
+          background: rgba(44, 27, 13, 0.02);
+          transform: translateY(-2px);
         }
       `}</style>
     </div>

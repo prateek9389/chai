@@ -63,34 +63,17 @@ function SubscriptionPortal() {
 
   const product = teas.find((t) => t.id === productId) || teas[0];
 
-  // Frequency Plan Selection
-  const [frequency, setFrequency] = useState("daily"); // "daily" | "weekly" | "custom"
-  const priceMultiplier = frequency === "daily" ? 0.75 : frequency === "weekly" ? 0.85 : 0.9;
+  // Delivery Session Selection
+  const [frequency, setFrequency] = useState("morning"); // "morning" | "evening" | "custom"
+  const priceMultiplier = frequency === "morning" ? 0.75 : frequency === "evening" ? 0.85 : 0.9;
   const unitPrice = Math.round(product.priceNum * priceMultiplier);
 
-  // Time Slot selection
-  const [timeSlot, setTimeSlot] = useState("morning"); // "morning" | "noon" | "evening"
-
-  // Custom Calendar date selection
-  const [startDate, setStartDate] = useState("2026-07-05");
-  const [endDate, setEndDate] = useState("2026-08-05");
-
-  // Selection Additions
-  const [subSugarLevel, setSubSugarLevel] = useState("normal");
-  const [subMilkType, setSubMilkType] = useState("whole");
-
-  // Selection of custom herbs in subscription
-  const [addedSpices, setAddedSpices] = useState(["adrak"]);
+  const [customTime, setCustomTime] = useState("09:00");
 
   // Invoice & Payment Modal Wizard State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentStep, setPaymentStep] = useState("invoice"); // "invoice" | "paying" | "success"
 
-  const toggleSpice = (spice) => {
-    setAddedSpices((prev) =>
-      prev.includes(spice) ? prev.filter((s) => s !== spice) : [...prev, spice]
-    );
-  };
 
   const handleStartSubscription = () => {
     setPaymentStep("invoice");
@@ -105,7 +88,7 @@ function SubscriptionPortal() {
   };
 
   // Cost calculations
-  const totalDeliveries = frequency === "daily" ? 30 : frequency === "weekly" ? 12 : 8;
+  const totalDeliveries = frequency === "morning" ? 30 : frequency === "evening" ? 12 : 8;
   const itemsSubtotal = unitPrice * totalDeliveries;
   const taxes = Math.round(itemsSubtotal * 0.05);
   const finalTotal = itemsSubtotal + taxes;
@@ -187,22 +170,24 @@ function SubscriptionPortal() {
               
               <div className="plan-choices">
                 <div
-                  className={`plan-card ${frequency === "daily" ? "selected" : ""}`}
-                  onClick={() => setFrequency("daily")}
+                  className={`plan-card ${frequency === "morning" ? "selected" : ""}`}
+                  onClick={() => setFrequency("morning")}
                 >
                   <span className="save-badge">SAVE 25%</span>
-                  <h4>Daily Morning</h4>
-                  <p>Every single day to keep your mornings warm.</p>
+                  <div className="plan-card-icon">🌅</div>
+                  <h4>Morning</h4>
+                  <p>Fresh brew delivered at your doorstep every morning.</p>
                   <span className="plan-pricing">₹{Math.round(product.priceNum * 0.75)}/cup</span>
                 </div>
 
                 <div
-                  className={`plan-card ${frequency === "weekly" ? "selected" : ""}`}
-                  onClick={() => setFrequency("weekly")}
+                  className={`plan-card ${frequency === "evening" ? "selected" : ""}`}
+                  onClick={() => setFrequency("evening")}
                 >
                   <span className="save-badge">SAVE 15%</span>
-                  <h4>Weekly Infusion</h4>
-                  <p>3 deliveries per week (Mon, Wed, Fri).</p>
+                  <div className="plan-card-icon">🌇</div>
+                  <h4>Evening</h4>
+                  <p>Unwind with a warm cup delivered after work.</p>
                   <span className="plan-pricing">₹{Math.round(product.priceNum * 0.85)}/cup</span>
                 </div>
 
@@ -211,142 +196,25 @@ function SubscriptionPortal() {
                   onClick={() => setFrequency("custom")}
                 >
                   <span className="save-badge">SAVE 10%</span>
-                  <h4>Weekend Delight</h4>
-                  <p>Sip only on weekends (Sat, Sun).</p>
-                  <span className="plan-pricing">₹{Math.round(product.priceNum * 0.9)}/cup</span>
-                </div>
-              </div>
-            </div>
-
-            {/* STEP 2: SELECT DATE RANGE RANGE CALENDAR */}
-            <div className="form-card">
-              <span className="step-label">Step 2</span>
-              <h3 className="form-section-title">Calendar Range Selection</h3>
-              <p style={{ fontSize: "12.5px", color: "#666", marginBottom: "16px" }}>
-                Select when your recurring subscription begins and ends.
-              </p>
-
-              <div className="date-picker-row">
-                <div className="date-input-group">
-                  <label>Start Date</label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="date-input-field"
-                  />
-                </div>
-                <div className="date-input-group">
-                  <label>End Date</label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="date-input-field"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* STEP 3: PREFERRED TIME SLOT */}
-            <div className="form-card">
-              <span className="step-label">Step 3</span>
-              <h3 className="form-section-title">Preferred Delivery Hour</h3>
-              
-              <div className="time-slots-grid">
-                <button
-                  onClick={() => setTimeSlot("morning")}
-                  className={`slot-btn ${timeSlot === "morning" ? "active" : ""}`}
-                >
-                  <span className="slot-emoji">🌅</span>
-                  <div>
-                    <strong>Early Morning</strong>
-                    <span className="slot-hours">7:00 AM - 9:00 AM</span>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setTimeSlot("noon")}
-                  className={`slot-btn ${timeSlot === "noon" ? "active" : ""}`}
-                >
-                  <span className="slot-emoji">🏢</span>
-                  <div>
-                    <strong>Midday Office Break</strong>
-                    <span className="slot-hours">12:00 PM - 2:00 PM</span>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setTimeSlot("evening")}
-                  className={`slot-btn ${timeSlot === "evening" ? "active" : ""}`}
-                >
-                  <span className="slot-emoji">🌇</span>
-                  <div>
-                    <strong>Evening Relaxer</strong>
-                    <span className="slot-hours">5:30 PM - 7:30 PM</span>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* STEP 4: SUGAR & MILK PREFERENCES */}
-            <div className="form-card">
-              <span className="step-label">Step 4</span>
-              <h3 className="form-section-title">Configure Blend Details</h3>
-              
-              <div className="preferences-row">
-                {/* Sugar */}
-                <div style={{ flex: 1 }}>
-                  <label className="pref-label">Sugar Sweetness</label>
-                  <select
-                    value={subSugarLevel}
-                    onChange={(e) => setSubSugarLevel(e.target.value)}
-                    className="pref-select"
-                  >
-                    <option value="none">Zero Sugar ❌</option>
-                    <option value="light">Mild Sugar 🍬</option>
-                    <option value="normal">Normal Sugar 🍬🍬</option>
-                    <option value="extra">Extra Sugar 🍬🍬🍬</option>
-                  </select>
-                </div>
-
-                {/* Milk */}
-                <div style={{ flex: 1 }}>
-                  <label className="pref-label">Milk Base Type</label>
-                  <select
-                    value={subMilkType}
-                    onChange={(e) => setSubMilkType(e.target.value)}
-                    className="pref-select"
-                  >
-                    <option value="whole">Whole Milk 🥛</option>
-                    <option value="oat">Organic Oat Milk 🌾</option>
-                    <option value="almond">Almond Milk 🥜</option>
-                    <option value="black">Black Chai (No Milk) ☕️</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Spice inclusions */}
-              <div style={{ marginTop: "20px" }}>
-                <label className="pref-label">Included Organic Spices</label>
-                <div className="spice-pills-row">
-                  {[
-                    { key: "adrak", name: "Fresh Ginger 🫚" },
-                    { key: "elaichi", name: "Green Cardamom 🟢" },
-                    { key: "dalchini", name: "Cinnamon Bark 🪵" },
-                    { key: "kesar", name: "Kashmiri Saffron 🍂" },
-                  ].map((spice) => {
-                    const isSelected = addedSpices.includes(spice.key);
-                    return (
-                      <button
-                        key={spice.key}
-                        onClick={() => toggleSpice(spice.key)}
-                        className={`spice-pill-btn ${isSelected ? "selected" : ""}`}
-                      >
-                        {spice.name}
-                      </button>
-                    );
-                  })}
+                  <div className="plan-card-icon">⏰</div>
+                  <h4>Custom Slot</h4>
+                  <p>Pick your own preferred delivery window anytime.</p>
+                  {frequency === "custom" ? (
+                    <div className="custom-time-picker" onClick={(e) => e.stopPropagation()}>
+                      <label style={{ fontSize: "11px", fontWeight: "700", color: "#555", display: "block", marginBottom: "4px" }}>Select Time</label>
+                      <input 
+                        type="time" 
+                        value={customTime} 
+                        onChange={(e) => setCustomTime(e.target.value)}
+                        style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #ddd", width: "100%", fontSize: "13px" }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="slot-tag">
+                      🕐 Your chosen time
+                    </div>
+                  )}
+                  <span className="plan-pricing" style={{ marginTop: "12px" }}>₹{Math.round(product.priceNum * 0.9)}/cup</span>
                 </div>
               </div>
             </div>
@@ -365,7 +233,7 @@ function SubscriptionPortal() {
                 </div>
                 <div className="summary-item">
                   <span>Active Delivery Slot:</span>
-                  <span style={{ textTransform: "capitalize", fontWeight: "bold" }}>{timeSlot} hour</span>
+                  <span style={{ textTransform: "capitalize", fontWeight: "bold" }}>{frequency === "custom" ? customTime : frequency}</span>
                 </div>
                 <div className="summary-item" style={{ borderTop: "1px dashed rgba(0,0,0,0.08)", paddingTop: "12px", marginTop: "12px" }}>
                   <span style={{ fontSize: "16px", fontWeight: "bold" }}>Estimated Monthly Total:</span>
@@ -414,10 +282,7 @@ function SubscriptionPortal() {
                     <div>
                       <strong>{product.name} Subscription</strong>
                       <div className="invoice-sub-meta">
-                        <span>Time: {timeSlot.toUpperCase()} slot</span> | <span>Sugar: {subSugarLevel}</span> | <span>Milk: {subMilkType}</span>
-                      </div>
-                      <div className="invoice-sub-meta">
-                        <span>Spices: {addedSpices.join(", ") || "None"}</span>
+                        <span>Time: {(frequency === "custom" ? customTime : frequency).toUpperCase()} slot</span>
                       </div>
                     </div>
                     <span>₹{unitPrice} / cup</span>
@@ -481,7 +346,7 @@ function SubscriptionPortal() {
                 </h3>
                 
                 <p style={{ fontSize: "13.5px", color: "#555", marginTop: "12px", lineHeight: "1.5", maxWidth: "380px", margin: "12px auto 0" }}>
-                  Payment of <strong>₹{finalTotal}</strong> received. Your recurring deliveries will begin on <strong>{startDate}</strong> at the designated <strong>{timeSlot}</strong> slot!
+                  Payment of <strong>₹{finalTotal}</strong> received. Your recurring deliveries will begin <strong>tomorrow</strong> at the designated <strong>{(frequency === "custom" ? customTime : frequency).toUpperCase()}</strong> slot!
                 </p>
 
                 <div style={{ background: "#f9f9fb", border: "1px dashed #ddd", borderRadius: "8px", padding: "12px", margin: "20px auto", maxWidth: "300px", fontSize: "12px" }}>
@@ -721,6 +586,32 @@ function SubscriptionPortal() {
           font-size: 13.5px;
           font-weight: 900;
           color: #8a583c;
+        }
+
+        .plan-card-icon {
+          font-size: 24px;
+          margin-bottom: 8px;
+        }
+
+        .slot-tag {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          background: rgba(44, 27, 13, 0.06);
+          color: #5c4f47;
+          font-size: 10.5px;
+          font-weight: 700;
+          padding: 5px 10px;
+          border-radius: 999px;
+          margin-bottom: 12px;
+          border: 1.5px solid transparent;
+          transition: all 0.25s ease;
+        }
+
+        .slot-tag-filled {
+          background: #2c1b0d;
+          color: #ffffff;
+          border-color: #2c1b0d;
         }
 
         /* Calendar Picker */
