@@ -1,60 +1,53 @@
 "use client";
 
-import { useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { getProductById, getAddons, getCoupons, createOrder } from "@/lib/firestore";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { useAuth } from "@/contexts/AuthContext";
+import { useCart } from "@/contexts/CartContext";
 
 function CheckoutPortal() {
   const searchParams = useSearchParams();
-  
-  const productId = parseInt(searchParams.get("productId")) || 1;
-  const initialQuantity = parseInt(searchParams.get("quantity")) || 1;
-  const addonParam = searchParams.get("addons") || "";
-  const initialAddonIds = addonParam ? addonParam.split(",") : [];
+  const router = useRouter();
+  const { user, profile, loading: authLoading } = useAuth();
+  const { cartItems, getCartTotal, clearCart, isLoaded: cartLoaded } = useCart();
+  const [checkoutStep, setCheckoutStep] = useState("shipping");
+  const [orderRef, setOrderRef] = useState("");
 
-  const teas = [
-    {
-      id: 1,
-      name: "Classic Masala Chai",
-      desc: "Robust Assam black tea hand-blended with ginger, cardamom, cinnamon, and cloves.",
-      price: "₹149",
-      priceNum: 149,
-      image: "https://i.pinimg.com/736x/82/64/80/8264808f4840845e96abc7f7ec60b82f.jpg",
-    },
-    {
-      id: 2,
-      name: "Cardamom (Elaichi) Chai",
-      desc: "Rich, fragrant infusion of crushed green cardamom pods and premium CTC granules.",
-      price: "₹169",
-      priceNum: 169,
-      image: "https://i.pinimg.com/1200x/5c/b8/8a/5cb88a02e013987379378009ba8d7eb2.jpg",
-    },
-    {
-      id: 3,
-      name: "Ginger (Adrak) Chai",
-      desc: "Invigorating immunity booster brewed with fresh, spicy grated ginger root.",
-      price: "₹169",
-      priceNum: 169,
-      image: "https://i.pinimg.com/736x/95/d1/9a/95d19a7cad652dd1caceb091c9794ac9.jpg",
-    },
-  ];
+  useEffect(() => {
+    if (cartLoaded && cartItems.length === 0 && checkoutStep !== "thankyou") {
+      router.push("/");
+    }
+  }, [cartItems, cartLoaded, checkoutStep, router]);
 
-  const product = teas.find((t) => t.id === productId) || teas[0];
+  // Auth guard: redirect to login if not logged in
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login?redirect=/checkout");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, authLoading]);
 
-  const allAddons = [
-    { id: "a1", name: "Premium Clay Kulhad Set", price: "₹120", priceNum: 120 },
-    { id: "a2", name: "Organic Jaggery Powder", price: "₹65", priceNum: 65 },
-    { id: "a3", name: "Cardamom Crispy Rusk", price: "₹45", priceNum: 45 },
-    { id: "a4", name: "Almond Cookies", price: "₹89", priceNum: 89 },
-  ];
+  const [dbCoupons, setDbCoupons] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // State
-  const [quantity, setQuantity] = useState(initialQuantity);
-  const [selectedAddons, setSelectedAddons] = useState(
-    allAddons.filter((ad) => initialAddonIds.includes(ad.id))
-  );
+  // State (moved up)
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const c = await getCoupons();
+        setDbCoupons(c);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   // Address Step form
   const [fullname, setFullname] = useState("");
@@ -71,34 +64,43 @@ function CheckoutPortal() {
   // Payment
   const [paymentMethod, setPaymentMethod] = useState("upi"); // "upi" | "card" | "wallet"
 
-  // Order workflow states
-  const [checkoutStep, setCheckoutStep] = useState("shipping"); // "shipping" | "payment" | "processing" | "thankyou"
-  const [orderRef, setOrderRef] = useState("");
+  // Pre-fill from logged-in user profile
+  useEffect(() => {
+    if (user) {
+      setFullname(profile?.name || user.displayName || "");
+      setPhone(profile?.phone || "");
+      setAddress(profile?.floor || "");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, profile]);
 
   const handleUseLocation = () => {
     setLocLoading(true);
     setTimeout(() => {
-      setFullname("Royal Tea Aficionado");
-      setPhone("+91 98765 43210");
+      setFullname(profile?.name || user?.displayName || "Royal Tea Aficionado");
+      setPhone(profile?.phone || "+91 98765 43210");
       setPincode("302001");
-      setAddress("Palace Square Vista, Block 4-C, Jaipur, Rajasthan, India");
+      setAddress(profile?.floor ? `${profile.floor}, Jaipur, Rajasthan` : "Palace Square Vista, Block 4-C, Jaipur, Rajasthan, India");
       setLocLoading(false);
     }, 1500);
   };
 
   const handleApplyCoupon = (code) => {
-    if (code.toUpperCase() === "CHAICLUB") {
-      setAppliedDiscount(50);
-      setAppliedCodeLabel("CHAICLUB (₹50 Off)");
-      setCouponCode("CHAICLUB");
-    } else if (code.toUpperCase() === "FIRSTCHAI") {
-      const sub = product.priceNum * quantity;
-      const disc = Math.round(sub * 0.2);
-      setAppliedDiscount(disc);
-      setAppliedCodeLabel(`FIRSTCHAI (20% Off - Save ₹${disc})`);
-      setCouponCode("FIRSTCHAI");
+    const coupon = dbCoupons.find(c => c.code.toUpperCase() === code.toUpperCase() && c.active);
+    if (coupon) {
+      if (coupon.type === "flat") {
+        setAppliedDiscount(coupon.value);
+        setAppliedCodeLabel(`${coupon.code} (₹${coupon.value} Off)`);
+        setCouponCode(coupon.code);
+      } else if (coupon.type === "percent") {
+        const sub = getCartTotal();
+        const disc = Math.round(sub * (coupon.value / 100));
+        setAppliedDiscount(disc);
+        setAppliedCodeLabel(`${coupon.code} (${coupon.value}% Off - Save ₹${disc})`);
+        setCouponCode(coupon.code);
+      }
     } else {
-      alert("Invalid coupon code. Try CHAICLUB or FIRSTCHAI.");
+      alert("Invalid or inactive coupon code.");
     }
   };
 
@@ -110,11 +112,13 @@ function CheckoutPortal() {
     );
   };
 
+  if (loading || !cartLoaded) return <div style={{ background: "#fcfaf7", minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "center" }}><h2>Loading Checkout...</h2></div>;
+  if (cartItems.length === 0 && checkoutStep !== "thankyou") return null;
+
   // Cost calculations
-  const itemsCost = product.priceNum * quantity;
-  const addonsCost = selectedAddons.reduce((sum, item) => sum + item.priceNum, 0);
-  const subtotal = itemsCost + addonsCost;
-  const finalPayable = Math.max(0, subtotal - appliedDiscount + 20); // 20 delivery charge
+  const subtotal = getCartTotal();
+  const deliveryCharge = subtotal > 500 ? 0 : 50;
+  const finalPayable = Math.max(0, subtotal - appliedDiscount + deliveryCharge);
 
   const handlePlaceOrder = () => {
     if (checkoutStep === "shipping") {
@@ -128,10 +132,31 @@ function CheckoutPortal() {
 
     if (checkoutStep === "payment") {
       setCheckoutStep("processing");
-      setTimeout(() => {
-        setOrderRef(`CHAI-ORD-${Math.floor(100000 + Math.random() * 900000)}`);
+      const orderData = {
+        userId: user?.uid || "guest",
+        customer: fullname,
+        phone,
+        pincode,
+        office: address,
+        item: cartItems.map(i => `${i.name} x${i.quantity}`).join(" + "),
+        sugar: cartItems.map(i => i.sugar).join(", ") || "Normal Sugar",
+        milk: "Whole Milk",
+        img: cartItems[0]?.image || "/chai-ingredients.png",
+        priority: "Normal",
+        total: `₹${finalPayable}`,
+        addons: cartItems.map(i => i.addons).join(", "),
+        coupon: couponCode || "None"
+      };
+      
+      createOrder(orderData).then((id) => {
+        setOrderRef(id);
+        clearCart();
         setCheckoutStep("thankyou");
-      }, 2500);
+      }).catch(err => {
+        console.error(err);
+        alert("Order placement failed.");
+        setCheckoutStep("payment");
+      });
     }
   };
 
@@ -322,28 +347,7 @@ function CheckoutPortal() {
                 </div>
               </div>
 
-              {/* DYNAMIC ADDONS SELECTOR ON CHECKOUT */}
-              <div className="checkout-card compact">
-                <h4 style={{ fontSize: "14px", fontWeight: 800, marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                  Add Quick Sides to Brew
-                </h4>
-                <div className="checkout-addons-grid">
-                  {allAddons.map((ad) => {
-                    const isSelected = selectedAddons.find((item) => item.id === ad.id);
-                    return (
-                      <div
-                        key={ad.id}
-                        onClick={() => toggleAddonOnCheckout(ad)}
-                        className={`checkout-addon-pill ${isSelected ? "selected" : ""}`}
-                      >
-                        <span className="check-dot" />
-                        <span style={{ fontSize: "13px" }}>{ad.name}</span>
-                        <strong style={{ fontSize: "12.5px", color: "#8a583c", marginLeft: "auto" }}>{ad.price}</strong>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+
 
               {/* COUPONS SECTION */}
               <div className="checkout-card compact">
@@ -384,17 +388,26 @@ function CheckoutPortal() {
                 <h4 style={{ fontSize: "15px", fontWeight: 800, marginBottom: "14px" }}>Order Cost Summary</h4>
                 
                 <div className="breakdown-list">
-                  <div className="breakdown-row">
-                    <span>{product.name} (x{quantity})</span>
-                    <span>₹{itemsCost}</span>
-                  </div>
-
-                  {selectedAddons.length > 0 && (
-                    <div className="breakdown-row">
-                      <span>Add-on Sides ({selectedAddons.length})</span>
-                      <span>₹{addonsCost}</span>
+                  {cartItems.map((item, idx) => (
+                    <div key={idx} style={{ marginBottom: item.addonsList?.length > 0 ? "14px" : "8px" }}>
+                      <div className="breakdown-row" style={{ paddingBottom: item.addonsList?.length > 0 ? "4px" : "0" }}>
+                        <span>{item.name} (x{item.quantity})</span>
+                        <span>{item.basePrice ? `₹${item.basePrice * item.quantity}` : `₹${parseInt(String(item.price).replace(/[^0-9]/g, "")) * item.quantity}`}</span>
+                      </div>
+                      {item.addonsList && item.addonsList.length > 0 && item.addonsList.map((a, i) => (
+                        <div key={i} className="breakdown-row" style={{ paddingBottom: "2px", color: "#8a583c", fontSize: "12.5px" }}>
+                          <span>+ {a.name}</span>
+                          <span>₹{a.priceVal * item.quantity}</span>
+                        </div>
+                      ))}
+                      {item.addonsList && item.addonsList.length > 0 && (
+                        <div className="breakdown-row" style={{ paddingBottom: "2px", paddingTop: "4px", borderTop: "1px dashed #eee", marginTop: "4px", fontWeight: "700", fontSize: "13px", color: "#2c1b0d" }}>
+                          <span>Item Total</span>
+                          <span>₹{parseInt(String(item.price).replace(/[^0-9]/g, "")) * item.quantity}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  ))}
 
                   {appliedDiscount > 0 && (
                     <div className="breakdown-row discount">
@@ -404,8 +417,8 @@ function CheckoutPortal() {
                   )}
 
                   <div className="breakdown-row">
-                    <span>Express Delivery Charge</span>
-                    <span>₹20</span>
+                    <span>Delivery Charge</span>
+                    <span>{deliveryCharge === 0 ? "FREE" : `₹${deliveryCharge}`}</span>
                   </div>
 
                   <div className="breakdown-row total">
@@ -434,15 +447,26 @@ function CheckoutPortal() {
                   <strong>{orderRef}</strong>
                 </div>
                 <div className="receipt-row">
-                  <span>Product:</span>
-                  <strong>{quantity}x {product.name}</strong>
+                  <span>Items:</span>
+                  <strong>
+                    {cartItems.map((item, idx) => (
+                      <div key={idx} style={{ marginBottom: item.addonsList?.length > 0 ? "8px" : "4px" }}>
+                        <div>{item.quantity}x {item.name}</div>
+                        {item.addonsList && item.addonsList.length > 0 ? (
+                          item.addonsList.map((a, i) => (
+                            <div key={i} style={{ fontSize: "11px", color: "#666", fontWeight: "normal" }}>
+                              + {a.name} (₹{a.priceVal})
+                            </div>
+                          ))
+                        ) : item.addons ? (
+                          <div style={{ fontSize: "11px", color: "#666", fontWeight: "normal" }}>
+                            + {item.addons}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </strong>
                 </div>
-                {selectedAddons.length > 0 && (
-                  <div className="receipt-row">
-                    <span>Add-ons:</span>
-                    <strong>{selectedAddons.map(a => a.name).join(", ")}</strong>
-                  </div>
-                )}
                 <div className="receipt-row">
                   <span>Total Paid amount:</span>
                   <strong style={{ color: "#8a583c" }}>₹{finalPayable}</strong>

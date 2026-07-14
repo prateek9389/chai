@@ -1,67 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getProducts } from "@/lib/firestore";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function ChaiShowcase() {
   const router = useRouter();
+  const { user } = useAuth();
   const [cartItems, setCartItems] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [hoveredTeaId, setHoveredTeaId] = useState(null);
 
-  const teas = [
-    {
-      id: 1,
-      name: "Classic Masala Chai",
-      desc: "Black tea brewed with aromatic spices: ginger, cardamom, cinnamon, and cloves.",
-      price: "₹149",
-      color: "#8a583c",
-      image: "https://i.pinimg.com/736x/82/64/80/8264808f4840845e96abc7f7ec60b82f.jpg",
-    },
-    {
-      id: 2,
-      name: "Cardamom (Elaichi) Chai",
-      desc: "Fragrant and refreshing tea infused with crushed green cardamom pods.",
-      price: "₹169",
-      color: "#a67c52",
-      image: "https://i.pinimg.com/1200x/5c/b8/8a/5cb88a02e013987379378009ba8d7eb2.jpg",
-    },
-    {
-      id: 3,
-      name: "Ginger (Adrak) Chai",
-      desc: "Invigorating tea brewed with fresh grated ginger root. Great for immunity.",
-      price: "₹169",
-      color: "#c49a6c",
-      image: "https://i.pinimg.com/736x/95/d1/9a/95d19a7cad652dd1caceb091c9794ac9.jpg",
-    },
-    {
-      id: 4,
-      name: "Saffron (Kesar) Royal Chai",
-      desc: "Premium black tea infused with luxury saffron strands and cardamom.",
-      price: "₹249",
-      color: "#e6ad12",
-      image: "https://i.pinimg.com/736x/21/74/32/2174329b8ef1603c1cbc68bd9ef5865a.jpg",
-    },
-    {
-      id: 5,
-      name: "Tandoori Smoky Chai",
-      desc: "Clay pot baked tea giving it a unique, rich, earthy and smoky flavor profile.",
-      price: "₹199",
-      color: "#ab704d",
-      image: "https://i.pinimg.com/736x/f4/bf/80/f4bf80502363c42324e7126f07b612ad.jpg",
-    },
-    {
-      id: 6,
-      name: "Kashmiri Kahwa",
-      desc: "Exquisite green tea brewed with saffron strands, cinnamon, and almond slivers.",
-      price: "₹219",
-      color: "#5c7a4d",
-      image: "https://i.pinimg.com/736x/c4/a8/cc/c4a8ccde9a67e5f24e2be4d0621f4186.jpg",
-    },
-  ];
+  const [teas, setTeas] = useState([]);
+  
+  useEffect(() => {
+    getProducts().then(all => {
+      // Show only top 6 products
+      setTeas(all.slice(0, 6));
+    });
+  }, []);
 
   const handleAddToCart = (tea) => {
+    if (!user) {
+      router.push(`/login?redirect=/product/${tea.id}`);
+      return;
+    }
     setCartItems((prev) => {
       const existing = prev.find((item) => item.id === tea.id);
       if (existing) {
@@ -355,6 +320,14 @@ export default function ChaiShowcase() {
               </span>
             </div>
             <button
+              onClick={() => {
+                if (!user) {
+                  router.push("/login?redirect=/shop");
+                  return;
+                }
+                const first = cartItems[0];
+                if (first) router.push(`/checkout?productId=${first.id}&quantity=${first.quantity}`);
+              }}
               style={{
                 width: "100%",
                 background: "#000",

@@ -2,10 +2,24 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@/contexts/AuthContext";
+import { signOut } from "@/lib/auth";
+import { useRouter } from "next/navigation";
+import { useCart } from "@/contexts/CartContext";
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const { user, profile } = useAuth();
+  const { cartItems } = useCart();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    await signOut();
+    setUserMenuOpen(false);
+    router.push("/");
+  };
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -130,46 +144,123 @@ export default function Navbar() {
             <span>550 Coins</span>
           </Link>
 
-          {/* Shop button inside the header */}
+          {/* Cart Button */}
           <Link
-            href="/shop"
-            className="nav-buy-btn"
+            href="/cart"
             style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
               background: "#2c1b0d",
               color: "#ffffff",
-              padding: "12px 24px",
-              borderRadius: "999px",
-              fontSize: 14,
-              fontWeight: 600,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 10,
-              transition: "transform 0.2s ease, opacity 0.2s ease",
+              width: "42px",
+              height: "42px",
+              borderRadius: "50%",
               textDecoration: "none",
+              transition: "transform 0.2s ease, opacity 0.2s ease",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.03)")}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
             onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+            title="View Cart"
           >
-            Shop Now
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ overflow: "visible", display: "inline-block" }}
-            >
-              <path className="steam-line steam-1" d="M8 6c0-1.5 1-1.5 1-3" />
-              <path className="steam-line steam-2" d="M12 6c0-1.5 1-1.5 1-3" />
-              <path className="steam-line steam-3" d="M16 6c0-1.5 1-1.5 1-3" />
-              <path d="M17 9H7c0 0 0 6 5 6s5-6 5-6z" />
-              <path d="M17 11h1.5a1.5 1.5 0 0 1 1.5 1.5v0a1.5 1.5 0 0 1-1.5 1.5H17" />
-              <path d="M5 18h14" />
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="9" cy="21" r="1"></circle>
+              <circle cx="20" cy="21" r="1"></circle>
+              <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
             </svg>
+            {cartItems && cartItems.length > 0 && (
+              <span style={{
+                position: "absolute",
+                top: "-4px",
+                right: "-4px",
+                background: "#e74c3c",
+                color: "#fff",
+                fontSize: "11px",
+                fontWeight: 800,
+                width: "18px",
+                height: "18px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "50%",
+                border: "2px solid #fff",
+              }}>
+                {cartItems.reduce((acc, i) => acc + i.quantity, 0)}
+              </span>
+            )}
           </Link>
+
+          {/* Auth Button */}
+          {user ? (
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  background: "#f5f0e8",
+                  border: "1.5px solid rgba(44,27,13,0.15)",
+                  padding: "7px 14px 7px 8px",
+                  borderRadius: "999px",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  color: "#2c1b0d",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                <span style={{
+                  width: 28, height: 28, borderRadius: "50%",
+                  background: "linear-gradient(135deg, #8a3a00, #c05a00)",
+                  color: "#fff", display: "flex", alignItems: "center",
+                  justifyContent: "center", fontSize: "12px", fontWeight: 800,
+                  flexShrink: 0,
+                }}>
+                  {(user.displayName || user.email || "U")[0].toUpperCase()}
+                </span>
+              </button>
+              {userMenuOpen && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 8px)", right: 0,
+                  background: "#fff", borderRadius: "14px", padding: "8px",
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+                  minWidth: "160px", zIndex: 999,
+                  border: "1px solid rgba(0,0,0,0.06)",
+                }}>
+                  <Link href="/orders" onClick={() => setUserMenuOpen(false)} style={{
+                    display: "block", padding: "10px 14px", fontSize: "13px",
+                    fontWeight: 600, color: "#2c1b0d", textDecoration: "none",
+                    borderRadius: "8px",
+                  }}>📦 My Orders</Link>
+                  <button onClick={handleSignOut} style={{
+                    display: "block", width: "100%", textAlign: "left",
+                    padding: "10px 14px", fontSize: "13px", fontWeight: 600,
+                    color: "#e74c3c", background: "none", border: "none",
+                    cursor: "pointer", borderRadius: "8px", fontFamily: "inherit",
+                  }}>🚪 Sign Out</button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              style={{
+                background: "#f5f0e8",
+                border: "1.5px solid rgba(44,27,13,0.15)",
+                padding: "9px 18px",
+                borderRadius: "999px",
+                fontSize: "13px",
+                fontWeight: 700,
+                color: "#2c1b0d",
+                textDecoration: "none",
+                transition: "background 0.2s",
+              }}
+            >
+              Sign In
+            </Link>
+          )}
           
           <button
             aria-label="Menu"

@@ -1,109 +1,49 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { getProductById, getProducts, getAddons, submitProductFeedback, getApprovedFeedbackForProduct } from "@/lib/firestore";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { useCart } from "@/contexts/CartContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function ProductDetailPage({ params }) {
-  const productId = parseInt(params.id) || 1;
+  const productId = params.id;
   const router = useRouter();
+  const { user } = useAuth();
 
-  const teas = [
-    {
-      id: 1,
-      name: "Classic Masala Chai",
-      desc: "Black tea brewed with aromatic spices: ginger, cardamom, cinnamon, and cloves.",
-      price: "₹149",
-      priceNum: 149,
-      color: "#8a583c",
-      image: "https://i.pinimg.com/736x/82/64/80/8264808f4840845e96abc7f7ec60b82f.jpg",
-      bullets: ["Strong robust Assam tea base", "Hand-crushed winter spices", "No artificial sweeteners"],
-      gallery: [
-        { type: "image", url: "https://i.pinimg.com/736x/82/64/80/8264808f4840845e96abc7f7ec60b82f.jpg" },
-        { type: "video", url: "/tea-hover.mp4" },
-        { type: "image", url: "https://i.pinimg.com/webp/1200x/3b/64/27/3b6427d4563c2b05d8b0dd54ec265c2c.webp" },
-      ],
-    },
-    {
-      id: 2,
-      name: "Cardamom (Elaichi) Chai",
-      desc: "Fragrant and refreshing tea infused with crushed green cardamom pods.",
-      price: "₹169",
-      priceNum: 169,
-      color: "#a67c52",
-      image: "https://i.pinimg.com/1200x/5c/b8/8a/5cb88a02e013987379378009ba8d7eb2.jpg",
-      bullets: ["Authentic green cardamom pods", "Freshly packed CTC granules", "Rich creamy texture"],
-      gallery: [
-        { type: "image", url: "https://i.pinimg.com/1200x/5c/b8/8a/5cb88a02e013987379378009ba8d7eb2.jpg" },
-        { type: "video", url: "/tea-hover.mp4" },
-        { type: "image", url: "https://i.pinimg.com/webp/1200x/a2/54/ab/a254ab3176f62d952a39db1c7a2a6a2b.webp" },
-      ],
-    },
-    {
-      id: 3,
-      name: "Ginger (Adrak) Chai",
-      desc: "Invigorating tea brewed with fresh grated ginger root. Great for immunity.",
-      price: "₹169",
-      priceNum: 169,
-      color: "#c49a6c",
-      image: "https://i.pinimg.com/736x/95/d1/9a/95d19a7cad652dd1caceb091c9794ac9.jpg",
-      bullets: ["Grated fresh farm ginger", "Perfect for winter season", "Fights cough and cold"],
-      gallery: [
-        { type: "image", url: "https://i.pinimg.com/736x/95/d1/9a/95d19a7cad652dd1caceb091c9794ac9.jpg" },
-        { type: "video", url: "/tea-hover.mp4" },
-        { type: "image", url: "https://i.pinimg.com/webp/1200x/3b/64/27/3b6427d4563c2b05d8b0dd54ec265c2c.webp" },
-      ],
-    },
-    {
-      id: 4,
-      name: "Saffron (Kesar) Royal Chai",
-      desc: "Premium black tea infused with luxury saffron strands and cardamom.",
-      price: "₹249",
-      priceNum: 249,
-      color: "#e6ad12",
-      image: "https://i.pinimg.com/736x/21/74/32/2174329b8ef1603c1cbc68bd9ef5865a.jpg",
-      bullets: ["Luxury Kashmiri Kesar strands", "Slow cooked milk infusion", "Rich royal aromatic profile"],
-      gallery: [
-        { type: "image", url: "https://i.pinimg.com/736x/21/74/32/2174329b8ef1603c1cbc68bd9ef5865a.jpg" },
-        { type: "video", url: "/tea-hover.mp4" },
-        { type: "image", url: "https://i.pinimg.com/webp/1200x/a2/54/ab/a254ab3176f62d952a39db1c7a2a6a2b.webp" },
-      ],
-    },
-    {
-      id: 5,
-      name: "Tandoori Smoky Chai",
-      desc: "Clay pot baked tea giving it a unique, rich, earthy and smoky flavor profile.",
-      price: "₹199",
-      priceNum: 199,
-      color: "#ab704d",
-      image: "https://i.pinimg.com/736x/f4/bf/80/f4bf80502363c42324e7126f07b612ad.jpg",
-      bullets: ["Tandoor heated kulhad bake", "Earthy mineral clay properties", "Bold malty smoky taste"],
-      gallery: [
-        { type: "image", url: "https://i.pinimg.com/736x/f4/bf/80/f4bf80502363c42324e7126f07b612ad.jpg" },
-        { type: "video", url: "/tea-hover.mp4" },
-        { type: "image", url: "https://i.pinimg.com/webp/1200x/3b/64/27/3b6427d4563c2b05d8b0dd54ec265c2c.webp" },
-      ],
-    },
-    {
-      id: 6,
-      name: "Kashmiri Kahwa",
-      desc: "Exquisite green tea brewed with saffron strands, cinnamon, and almond slivers.",
-      price: "₹219",
-      priceNum: 219,
-      color: "#5c7a4d",
-      image: "https://i.pinimg.com/736x/c4/a8/cc/c4a8ccde9a67e5f24e2be4d0621f4186.jpg",
-      bullets: ["Whole leaf green tea", "Garnished with fresh almonds", "Deep golden saffron look"],
-      gallery: [
-        { type: "image", url: "https://i.pinimg.com/736x/c4/a8/cc/c4a8ccde9a67e5f24e2be4d0621f4186.jpg" },
-        { type: "video", url: "/tea-hover.mp4" },
-        { type: "image", url: "https://i.pinimg.com/webp/1200x/a2/54/ab/a254ab3176f62d952a39db1c7a2a6a2b.webp" },
-      ],
-    },
-  ];
+  const [product, setProduct] = useState(null);
+  const [addons, setAddons] = useState([]);
+  const [crossSellTeas, setCrossSellTeas] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const product = teas.find((t) => t.id === productId) || teas[0];
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const p = await getProductById(productId);
+        const a = await getAddons();
+        const all = await getProducts();
+        
+        let finalP = p || all.find(item => item.id === productId) || all[0];
+        if (finalP && !finalP.gallery) {
+          finalP.gallery = [
+            { type: "image", url: finalP.image || "https://i.pinimg.com/736x/82/64/80/8264808f4840845e96abc7f7ec60b82f.jpg" },
+            { type: "video", url: "/sub-video.mp4" }
+          ];
+        }
+        setProduct(finalP);
+        setAddons(a);
+        setCrossSellTeas(all.filter(t => String(t.id) !== String(productId)));
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, [productId]);
 
   // Active Gallery Media
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
@@ -129,33 +69,49 @@ export default function ProductDetailPage({ params }) {
   const [modalStep, setModalStep] = useState("sugar"); // "sugar" | "addons"
   const [selectedAddons, setSelectedAddons] = useState([]);
 
-  // Addon list items
-  const addons = [
-    {
-      id: "a1",
-      name: "Handmade Chai Biscuits",
-      price: "₹59",
-      image: "https://i.pinimg.com/webp/1200x/a2/54/ab/a254ab3176f62d952a39db1c7a2a6a2b.webp",
-    },
-    {
-      id: "a2",
-      name: "Butter Rusk Toasts",
-      price: "₹79",
-      image: "https://i.pinimg.com/webp/1200x/3b/64/27/3b6427d4563c2b05d8b0dd54ec265c2c.webp",
-    },
-    {
-      id: "a3",
-      name: "Classic Elaichi Rusk",
-      price: "₹69",
-      image: "https://i.pinimg.com/736x/95/d1/9a/95d19a7cad652dd1caceb091c9794ac9.jpg",
-    },
-    {
-      id: "a4",
-      name: "Almond Cookies",
-      price: "₹89",
-      image: "https://i.pinimg.com/736x/21/74/32/2174329b8ef1603c1cbc68bd9ef5865a.jpg",
-    },
-  ];
+  // Review System State
+  const [reviews, setReviews] = useState([]);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+
+  useEffect(() => {
+    if (product) {
+      getApprovedFeedbackForProduct(product.id).then(setReviews).catch(console.error);
+    }
+  }, [product]);
+
+  const handleSubmitReview = async () => {
+    if (!user) {
+      alert("Please login to submit a review.");
+      router.push("/login?redirect=/product/" + productId);
+      return;
+    }
+    if (reviewRating < 1 || reviewRating > 5) return;
+    setSubmittingReview(true);
+    try {
+      await submitProductFeedback({
+        productId: product.id,
+        productName: product.name,
+        userId: user.uid,
+        userName: user.email.split('@')[0],
+        rating: reviewRating,
+        comment: reviewComment
+      });
+      setSuccessMessage("Submitted");
+      setShowReviewModal(false);
+      setReviewComment("");
+      setReviewRating(5);
+    } catch (e) {
+      setSuccessMessage("Error submitting review. Please try again.");
+    }
+    setSubmittingReview(false);
+  };
+
+
+  const { addToCart } = useCart();
 
   // Actions
   const handlePurchase = () => {
@@ -175,18 +131,38 @@ export default function ProductDetailPage({ params }) {
 
   const handleFinishCheckout = () => {
     const addonIds = selectedAddons.map((a) => a.id).join(",");
+    
+    const basePrice = parseInt(String(product.price).replace(/[^0-9]/g, "")) || 0;
+    const addonsTotal = selectedAddons.reduce((sum, a) => {
+      return sum + (parseInt(String(a.price).replace(/[^0-9]/g, "")) || 0);
+    }, 0);
+    const finalPrice = basePrice + addonsTotal;
+
+    const itemToAdd = {
+      id: product.id,
+      name: product.name,
+      price: `₹${finalPrice}`,
+      basePrice: basePrice,
+      image: product.image || product.gallery?.[0]?.url,
+      quantity: quantity,
+      sugar: sugarLevel,
+      addons: selectedAddons.map(a => a.name).join(", "),
+      addonsList: selectedAddons.map(a => ({ name: a.name, price: a.price, priceVal: parseInt(String(a.price).replace(/[^0-9]/g, "")) || 0 })),
+    };
+
     if (purchaseType === "subscription") {
       router.push(`/subscribe?productId=${product.id}&addons=${addonIds}&sugar=${sugarLevel}`);
     } else {
-      router.push(`/checkout?productId=${product.id}&quantity=${quantity}&addons=${addonIds}&sugar=${sugarLevel}`);
+      addToCart(itemToAdd);
+      router.push(`/checkout`);
     }
     setIsAddonModalOpen(false);
   };
 
-  const crossSellTeas = teas.filter((t) => t.id !== productId);
-
-  // FAQ state
   const [openFaq, setOpenFaq] = useState(null);
+
+  if (loading) return <div style={{ background: "#fcfaf7", minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "center" }}><h2>Brewing Details...</h2></div>;
+  if (!product) return <div style={{ background: "#fcfaf7", minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "center" }}><h2>Product not found</h2></div>;
 
   return (
     <div style={{ background: "#f5f5f7", minHeight: "100vh", color: "#2c1b0d", width: "100vw", overflowX: "hidden" }}>
@@ -319,51 +295,53 @@ export default function ProductDetailPage({ params }) {
             </div>
 
             {/* Bullet Points */}
-            <ul className="nordic-bullets">
-              {product.bullets.map((b, idx) => (
-                <li key={idx}>{b}</li>
-              ))}
-            </ul>
+            {product.bullets && product.bullets.length > 0 && (
+              <ul className="nordic-bullets">
+                {product.bullets.map((b, idx) => (
+                  <li key={idx}>{b}</li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 
         {/* CUSTOMER REVIEWS GRID */}
         <section className="nordic-reviews-section">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px", flexWrap: "wrap", gap: "15px" }}>
             <h2 style={{ fontSize: "20px", fontWeight: 800 }}>HEAR FROM OUR CUSTOMERS</h2>
-            <span style={{ fontWeight: 700, fontSize: "15px", color: "#8a583c" }}>★ 4.8/5.0</span>
+            <div style={{ display: "flex", gap: "15px", alignItems: "center" }}>
+              <span style={{ fontWeight: 700, fontSize: "15px", color: "#8a583c" }}>★ 4.8/5.0</span>
+              <button 
+                onClick={() => {
+                  if (!user) {
+                    alert("Please login to write a review.");
+                    router.push("/login?redirect=/product/" + productId);
+                  } else {
+                    setShowReviewModal(true);
+                  }
+                }}
+                style={{ background: "#5c7a4d", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: 700, cursor: "pointer" }}
+              >
+                Write a Review
+              </button>
+            </div>
           </div>
 
-          <div className="reviews-tab-grid">
-            <div className="review-tab-card">
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
-                <strong>Sarah M. ★★★★★</strong>
-                <span className="verified-badge">Verified</span>
-              </div>
-              <p className="quote-tab">"Incredibly rich and refreshing. Perfect cardamom aroma!"</p>
+          {reviews.length === 0 ? (
+            <p style={{ color: "#777", fontSize: "14px", fontStyle: "italic" }}>No approved reviews yet. Be the first to share your thoughts!</p>
+          ) : (
+            <div className="reviews-tab-grid">
+              {reviews.map(r => (
+                <div className="review-tab-card" key={r.id}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
+                    <strong>{r.userName} {"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</strong>
+                    <span className="verified-badge">Verified</span>
+                  </div>
+                  {r.comment && <p className="quote-tab">"{r.comment}"</p>}
+                </div>
+              ))}
             </div>
-            <div className="review-tab-card">
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
-                <strong>Mike R. ★★★★★</strong>
-                <span className="verified-badge">Verified</span>
-              </div>
-              <p className="quote-tab">"Excellent taste, especially after adding fresh adrak and kesar!"</p>
-            </div>
-            <div className="review-tab-card">
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
-                <strong>Lena K. ★★★★★</strong>
-                <span className="verified-badge">Verified</span>
-              </div>
-              <p className="quote-tab">"Perfect earthy tone. Absolutely loving the smoky clay cup finish."</p>
-            </div>
-            <div className="review-tab-card">
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
-                <strong>Aarav S. ★★★★★</strong>
-                <span className="verified-badge">Verified</span>
-              </div>
-              <p className="quote-tab">"My daily morning partner. Hands down the best authentic masala chai online."</p>
-            </div>
-          </div>
+          )}
         </section>
 
         {/* FAQ ACCORDIONS */}
@@ -373,7 +351,7 @@ export default function ProductDetailPage({ params }) {
             {[
               { q: "Customization?", a: "You can click any ingredient in the left sidebar to dynamically add them to your tea." },
               { q: "Shipping Info?", a: "Standard free shipping takes 2-4 business days across India." },
-              { q: "Storage & Care?", a: "Store in a cool dry place. Once opened, seal in airtight containers." },
+              { q: "Storage & Care?", a: "Store in a cool dry place. Once opened, seal in airtight containers." }
             ].map((faq, idx) => {
               const isOpen = openFaq === idx;
               return (
@@ -410,7 +388,7 @@ export default function ProductDetailPage({ params }) {
           </div>
         </section>
 
-        <Footer />
+      <Footer />
       </div>
 
       {/* Add-ons & Sugar Selection Popup Modal */}
@@ -508,6 +486,82 @@ export default function ProductDetailPage({ params }) {
           </div>
         </div>
       )}
+
+      {/* Old Product Reviews Section Removed */}
+
+      {/* Write Review Modal */}
+      {showReviewModal && (
+        <div className="modal-backdrop" onClick={() => !submittingReview && setShowReviewModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "450px" }}>
+            <button className="modal-close" onClick={() => !submittingReview && setShowReviewModal(false)}>×</button>
+            <h3 style={{ fontSize: "20px", fontWeight: 800, color: "#2c1b0d", marginBottom: "8px" }}>Rate & Review</h3>
+            <p style={{ fontSize: "13px", color: "#666", marginBottom: "24px" }}>Share your feedback about {product?.name}</p>
+
+            <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginBottom: "24px" }}>
+              {[1,2,3,4,5].map(star => (
+                <span 
+                  key={star} 
+                  onClick={() => setReviewRating(star)}
+                  style={{ 
+                    fontSize: "32px", 
+                    cursor: "pointer", 
+                    color: star <= reviewRating ? "#f1c40f" : "#ddd",
+                    transition: "color 0.2s"
+                  }}
+                >
+                  ★
+                </span>
+              ))}
+            </div>
+
+            <textarea 
+              placeholder="What did you like or dislike?"
+              value={reviewComment}
+              onChange={(e) => setReviewComment(e.target.value)}
+              rows="4"
+              style={{
+                width: "100%", padding: "12px", borderRadius: "12px", border: "1px solid #eee",
+                fontSize: "14px", resize: "none", marginBottom: "24px", fontFamily: "inherit", outline: "none"
+              }}
+            />
+
+            <button 
+              onClick={handleSubmitReview}
+              disabled={submittingReview}
+              style={{
+                width: "100%", padding: "14px", background: "#2c1b0d", color: "#fff",
+                border: "none", borderRadius: "999px", fontWeight: 700, fontSize: "14px",
+                cursor: submittingReview ? "not-allowed" : "pointer", opacity: submittingReview ? 0.7 : 1
+              }}
+            >
+              {submittingReview ? "Submitting..." : "Submit Review"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal */}
+      {successMessage && (
+        <div className="modal-backdrop" onClick={() => setSuccessMessage("")}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "400px", textAlign: "center" }}>
+            <div style={{ fontSize: "48px", marginBottom: "16px" }}>{successMessage.includes("Error") ? "❌" : "✅"}</div>
+            <h3 style={{ fontSize: "22px", fontWeight: 800, color: "#2c1b0d", marginBottom: "12px" }}>
+              {successMessage.includes("Error") ? "Oops!" : "Success"}
+            </h3>
+            <p style={{ fontSize: "14px", color: "#666", marginBottom: "24px", lineHeight: "1.5" }}>{successMessage}</p>
+            <button 
+              onClick={() => setSuccessMessage("")}
+              style={{
+                width: "100%", padding: "12px", background: successMessage.includes("Error") ? "#e74c3c" : "#5c7a4d", color: "#fff",
+                border: "none", borderRadius: "999px", fontWeight: 700, cursor: "pointer", transition: "0.2s"
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
 
       {/* Styled JSX */}
       <style suppressHydrationWarning>{`

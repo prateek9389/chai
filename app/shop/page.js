@@ -1,154 +1,29 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { db } from "@/lib/firebase";
+import { collection, getDocs } from "firebase/firestore";
+import { useAuth } from "@/contexts/AuthContext";
+import { onProductsSnapshot } from "@/lib/firestore";
 
 export default function ShopPage() {
-  // All 10 curated premium products
-  const products = [
-    {
-      id: 1,
-      name: "Classic Masala Chai",
-      desc: "Robust Assam black tea hand-blended with ginger, cardamom, cinnamon, and cloves.",
-      price: "₹149",
-      priceNum: 149,
-      category: "Masala",
-      caffeine: "high",
-      sweetness: "unsweetened",
-      steepTime: "traditional",
-      pairing: "biscuits",
-      image: "https://i.pinimg.com/736x/82/64/80/8264808f4840845e96abc7f7ec60b82f.jpg",
-      rating: "4.8",
-    },
-    {
-      id: 2,
-      name: "Cardamom (Elaichi) Chai",
-      desc: "Rich, fragrant infusion of crushed green cardamom pods and premium CTC granules.",
-      price: "₹169",
-      priceNum: 169,
-      category: "Cardamom",
-      caffeine: "high",
-      sweetness: "unsweetened",
-      steepTime: "traditional",
-      pairing: "rusks",
-      image: "https://i.pinimg.com/1200x/5c/b8/8a/5cb88a02e013987379378009ba8d7eb2.jpg",
-      rating: "4.9",
-    },
-    {
-      id: 3,
-      name: "Ginger (Adrak) Chai",
-      desc: "Invigorating immunity booster brewed with fresh, spicy grated ginger root.",
-      price: "₹169",
-      priceNum: 169,
-      category: "Ginger",
-      caffeine: "high",
-      sweetness: "unsweetened",
-      steepTime: "traditional",
-      pairing: "rusks",
-      image: "https://i.pinimg.com/736x/95/d1/9a/95d19a7cad652dd1caceb091c9794ac9.jpg",
-      rating: "4.7",
-    },
-    {
-      id: 4,
-      name: "Saffron (Kesar) Royal Chai",
-      desc: "Luxurious royal golden blend loaded with Kashmiri Kesar strands and cardamom.",
-      price: "₹249",
-      priceNum: 249,
-      category: "Saffron",
-      caffeine: "medium",
-      sweetness: "mild",
-      steepTime: "slow",
-      pairing: "cookies",
-      image: "https://i.pinimg.com/736x/21/74/32/2174329b8ef1603c1cbc68bd9ef5865a.jpg",
-      rating: "5.0",
-    },
-    {
-      id: 5,
-      name: "Tandoori Smoky Chai",
-      desc: "Unique clay-pot baked malty tea with natural mineral qualities and a robust smoky note.",
-      price: "₹199",
-      priceNum: 199,
-      category: "Masala",
-      caffeine: "high",
-      sweetness: "unsweetened",
-      steepTime: "slow",
-      pairing: "samosas",
-      image: "https://i.pinimg.com/736x/f4/bf/80/f4bf80502363c42324e7126f07b612ad.jpg",
-      rating: "4.8",
-    },
-    {
-      id: 6,
-      name: "Kashmiri Kahwa",
-      desc: "Exquisite green tea brewed with whole saffron strands, cinnamon, and raw almond slivers.",
-      price: "₹219",
-      priceNum: 219,
-      category: "Organic Greens",
-      caffeine: "medium",
-      sweetness: "mild",
-      steepTime: "quick",
-      pairing: "cookies",
-      image: "https://i.pinimg.com/736x/c4/a8/cc/c4a8ccde9a67e5f24e2be4d0621f4186.jpg",
-      rating: "4.9",
-    },
-    {
-      id: 7,
-      name: "Rose Petal Herbal Infusion",
-      desc: "Calming caffeine-free blend of dried red rose petals, fennel, and licorice root.",
-      price: "₹189",
-      priceNum: 189,
-      category: "Herbal Infusions",
-      caffeine: "none",
-      sweetness: "mild",
-      steepTime: "quick",
-      pairing: "biscuits",
-      image: "https://i.pinimg.com/webp/1200x/3b/64/27/3b6427d4563c2b05d8b0dd54ec265c2c.webp",
-      rating: "4.6",
-    },
-    {
-      id: 8,
-      name: "Tulsi Holy Basil Chai",
-      desc: "Stress-relieving wellness tea blending holy basil leaves with premium CTC tea.",
-      price: "₹159",
-      priceNum: 159,
-      category: "Herbal Infusions",
-      caffeine: "high",
-      sweetness: "unsweetened",
-      steepTime: "traditional",
-      pairing: "biscuits",
-      image: "https://i.pinimg.com/webp/1200x/a2/54/ab/a254ab3176f62d952a39db1c7a2a6a2b.webp",
-      rating: "4.8",
-    },
-    {
-      id: 9,
-      name: "Darjeeling First Flush",
-      desc: "Delicate and floral single-estate black tea harvested during early spring.",
-      price: "₹299",
-      priceNum: 299,
-      category: "Organic Greens",
-      caffeine: "medium",
-      sweetness: "unsweetened",
-      steepTime: "quick",
-      pairing: "cookies",
-      image: "https://i.pinimg.com/736x/82/64/80/8264808f4840845e96abc7f7ec60b82f.jpg",
-      rating: "4.9",
-    },
-    {
-      id: 10,
-      name: "Organic Matcha Latte Mix",
-      desc: "Finely ground premium Japanese Uji stone-ground green tea leaves.",
-      price: "₹349",
-      priceNum: 349,
-      category: "Organic Greens",
-      caffeine: "high",
-      sweetness: "sweetened",
-      steepTime: "quick",
-      pairing: "cookies",
-      image: "https://i.pinimg.com/1200x/5c/b8/8a/5cb88a02e013987379378009ba8d7eb2.jpg",
-      rating: "4.9",
-    },
-  ];
+  const router = useRouter();
+  const { user } = useAuth();
+  // Products fetched from Firestore
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onProductsSnapshot((items) => {
+      setProducts(items);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Filters State
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -195,6 +70,7 @@ export default function ShopPage() {
       return true;
     });
   }, [
+    products,
     selectedCategory,
     selectedPrice,
     selectedCaffeine,
@@ -382,15 +258,20 @@ export default function ShopPage() {
             </div>
             
             <div className="toolbar-actions">
-              <span className="results-count">Showing <strong>{filteredProducts.length}</strong> of 10 products</span>
+              <span className="results-count">Showing <strong>{filteredProducts.length}</strong> of {products.length} products</span>
               <button className="mobile-filter-trigger-btn" onClick={() => setMobileFilterOpen(true)}>
                 Filters ☰
               </button>
             </div>
           </div>
 
-          {/* Product Grid */}
-          {filteredProducts.length === 0 ? (
+          {/* Loading State */}
+          {loading ? (
+            <div className="loading-state">
+              <div className="loading-spinner"></div>
+              <p>Brewing your collection...</p>
+            </div>
+          ) : filteredProducts.length === 0 ? (
             <div className="empty-state">
               <h3>No blends matched your filters</h3>
               <p>Try resetting filters or adjusting search parameters to explore our custom brews.</p>
@@ -402,7 +283,17 @@ export default function ShopPage() {
             <div className="shop-product-grid">
               {filteredProducts.map((product) => (
                 <div key={product.id} className="shop-card-wrapper">
-                  <Link href={`/product/${product.id}`} className="shop-card-link-block">
+                  <div
+                    className="shop-card-link-block"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => {
+                      if (!user) {
+                        router.push(`/login?redirect=/product/${product.id}`);
+                      } else {
+                        router.push(`/product/${product.id}`);
+                      }
+                    }}
+                  >
                     <div className="shop-card-img-box">
                       <img src={product.image} alt={product.name} className="shop-card-img" />
                       <span className="card-rating-badge">★ {product.rating}</span>
@@ -415,10 +306,10 @@ export default function ShopPage() {
                       
                       <div className="shop-card-footer">
                         <span className="shop-card-price">{product.price}</span>
-                        <span className="shop-card-arrow">View details →</span>
+                        <span className="shop-card-arrow">{user ? "View details →" : "Sign in to order →"}</span>
                       </div>
                     </div>
-                  </Link>
+                  </div>
                 </div>
               ))}
             </div>
@@ -676,6 +567,35 @@ export default function ShopPage() {
           font-weight: 700;
           font-size: 12.5px;
           cursor: pointer;
+        }
+
+        /* Loading state */
+        .loading-state {
+          text-align: center;
+          padding: 80px 24px;
+          background: #ffffff;
+          border-radius: 16px;
+          border: 1px solid rgba(0,0,0,0.04);
+        }
+
+        .loading-spinner {
+          width: 40px;
+          height: 40px;
+          border: 3px solid rgba(44, 27, 13, 0.1);
+          border-top-color: #8a583c;
+          border-radius: 50%;
+          margin: 0 auto 16px;
+          animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        .loading-state p {
+          font-size: 14px;
+          color: #888;
+          font-weight: 600;
         }
 
         /* Product Grid */

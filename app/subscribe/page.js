@@ -3,12 +3,15 @@
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { addSubscription } from "@/lib/firestore";
 import Navbar from "@/components/Navbar";
+import { useAuth } from "@/contexts/AuthContext";
 import Footer from "@/components/Footer";
 
 function SubscriptionPortal() {
   const searchParams = useSearchParams();
-  const productId = parseInt(searchParams.get("productId")) || 1;
+  const { user, profile } = useAuth();
+  const productId = searchParams.get("productId") || "1";
   const sugarParam = searchParams.get("sugar") || "with";
   const addonsParam = searchParams.get("addons") || "";
 
@@ -74,14 +77,15 @@ function SubscriptionPortal() {
     },
   ];
 
-  const product = teas.find((t) => t.id === productId) || teas[0];
+  const product = teas.find((t) => String(t.id) === String(productId)) || teas[0];
 
   // Delivery Session Selection
   const [frequency, setFrequency] = useState("morning"); // "morning" | "evening" | "custom"
   const priceMultiplier = frequency === "morning" ? 0.75 : frequency === "evening" ? 0.85 : 0.9;
-  const unitPrice = Math.round(product.priceNum * priceMultiplier);
+  const unitPrice = product ? Math.round(product.priceNum * priceMultiplier) : 0;
 
   const [customTime, setCustomTime] = useState("09:00");
+  const [address, setAddress] = useState("");
 
   // Invoice & Payment Modal Wizard State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -93,16 +97,45 @@ function SubscriptionPortal() {
     setIsPaymentModalOpen(true);
   };
 
-  const handleTriggerPayment = () => {
-    setPaymentStep("paying");
-    setTimeout(() => {
-      setPaymentStep("success");
-    }, 2500);
-  };
-
   // Cost calculations
   const totalDeliveries = frequency === "morning" ? 30 : frequency === "evening" ? 12 : 8;
   const itemsSubtotal = (unitPrice * totalDeliveries) + addonsTotal;
+
+  const handleTriggerPayment = async () => {
+    setPaymentStep("paying");
+    
+    // Build subscription object
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() + 1); // Starts tomorrow
+    const endDate = new Date(startDate);
+    const durationDays = totalDeliveries;
+    endDate.setDate(endDate.getDate() + durationDays);
+
+    const subData = {
+      customer: profile?.name || user?.displayName || "Guest User",
+      office: address || "Tower A, Floor 1",
+      item: product.name,
+      items: `${product.name} (${sugarParam} sugar) ${addonsParam ? " + " + addonsParam : ""}`,
+      total: itemsSubtotal + Math.round(itemsSubtotal * 0.05),
+      cost: itemsSubtotal + Math.round(itemsSubtotal * 0.05),
+      price: itemsSubtotal + Math.round(itemsSubtotal * 0.05),
+      timeSlot: frequency === "custom" ? customTime : frequency === "morning" ? "09:00" : "16:00",
+      frequency: frequency.toUpperCase(),
+      startDate: startDate.toLocaleDateString('en-GB'),
+      endDateIso: endDate.toISOString(),
+      endDate: endDate.toLocaleDateString('en-GB'),
+      status: "Active"
+    };
+
+    try {
+      await addSubscription(subData);
+    } catch (err) {
+      console.error("Error saving subscription:", err);
+    }
+
+    setPaymentStep("success");
+  };
+
   const taxes = Math.round(itemsSubtotal * 0.05);
   const finalTotal = itemsSubtotal + taxes;
 
@@ -230,6 +263,20 @@ function SubscriptionPortal() {
                   <span className="plan-pricing" style={{ marginTop: "12px" }}>₹{Math.round(product.priceNum * 0.9)}/cup</span>
                 </div>
               </div>
+            </div>
+
+            {/* STEP 2: ENTER ADDRESS */}
+            <div className="form-card" style={{ marginTop: "20px" }}>
+              <span className="step-label">Step 2</span>
+              <h3 className="form-section-title">Delivery Address</h3>
+              <p style={{ fontSize: "13px", color: "#666", marginBottom: "16px" }}>Please provide your exact building floor and desk/room number.</p>
+              <input 
+                type="text" 
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="e.g. Tower B, Floor 4, Desk 42"
+                style={{ width: "100%", padding: "12px 16px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "14px", fontFamily: "var(--font-body)" }}
+              />
             </div>
 
             {/* ORDER SUMMARY */}
@@ -369,7 +416,7 @@ function SubscriptionPortal() {
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: "#777" }}>Next Delivery:</span>
-                    <strong>{startDate}</strong>
+                    <strong>Tomorrow ({frequency === "custom" ? customTime : frequency === "morning" ? "07:30 AM" : "05:00 PM"})</strong>
                   </div>
                 </div>
 

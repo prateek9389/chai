@@ -1,62 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { db, updateOrder } from "@/lib/firestore";
+import { collection, onSnapshot } from "firebase/firestore";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function OrdersPage() {
   const [activeTab, setActiveTab] = useState("subscriptions"); // "subscriptions" | "orders"
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { user, loading: authLoading } = useAuth();
 
-  const subscriptions = [
-    {
-      id: "sub-1",
-      name: "Daily Aromatic Masala Chai",
-      frequency: "Daily Morning Cycle",
-      time: "7:00 AM - 9:00 AM",
-      start: "2026-07-05",
-      price: "₹119 / cup",
-      status: "Active",
-      image: "https://i.pinimg.com/736x/82/64/80/8264808f4840845e96abc7f7ec60b82f.jpg",
-    },
-    {
-      id: "sub-2",
-      name: "Weekend Royal Saffron Tea",
-      frequency: "Weekend Relaxer Cycle",
-      time: "5:30 PM - 7:30 PM",
-      start: "2026-07-06",
-      price: "₹224 / cup",
-      status: "Active",
-      image: "https://i.pinimg.com/736x/21/74/32/2174329b8ef1603c1cbc68bd9ef5865a.jpg",
-    },
-  ];
+  useEffect(() => {
+    let unsubOrders = () => {};
+    let unsubSubs = () => {};
 
-  const orders = [
-    {
-      id: "CHAI-ORD-982110",
-      date: "2026-07-01",
-      status: "Delivered",
-      total: "₹214",
-      item: "Cardamom (Elaichi) Chai x1 + rusks",
-      image: "https://i.pinimg.com/1200x/5c/b8/8a/5cb88a02e013987379378009ba8d7eb2.jpg",
-    },
-    {
-      id: "CHAI-ORD-839210",
-      date: "2026-06-28",
-      status: "Delivered",
-      total: "₹199",
-      item: "Tandoori Smoky Chai x1",
-      image: "https://i.pinimg.com/736x/f4/bf/80/f4bf80502363c42324e7126f07b612ad.jpg",
-    },
-    {
-      id: "CHAI-ORD-110294",
-      date: "2026-06-22",
-      status: "Delivered",
-      total: "₹349",
-      item: "Organic Matcha Latte Mix x1",
-      image: "https://i.pinimg.com/1200x/5c/b8/8a/5cb88a02e013987379378009ba8d7eb2.jpg",
-    },
-  ];
+    if (!authLoading && user) {
+      unsubOrders = onSnapshot(collection(db, "orders"), (snap) => {
+        const o = [];
+        snap.forEach(d => o.push({ ...d.data(), id: d.id }));
+        const myOrders = o.filter((ord) => ord.userId === user.uid);
+        setOrders(myOrders);
+      });
+
+      unsubSubs = onSnapshot(collection(db, "subscriptions"), (snap) => {
+        const s = [];
+        snap.forEach(d => s.push({ ...d.data(), id: d.id }));
+        const mySubs = s.filter((sub) => sub.userId === user.uid);
+        setSubscriptions(mySubs);
+      });
+      setLoading(false);
+    } else if (!authLoading && !user) {
+      setLoading(false);
+    }
+
+    return () => {
+      unsubOrders();
+      unsubSubs();
+    };
+  }, [user, authLoading]);
 
   const handlePauseSub = (id) => {
     alert(`Subscription ${id} has been paused successfully.`);
@@ -131,7 +117,19 @@ export default function OrdersPage() {
                 <img src={ord.image} alt={ord.id} className="order-card-img" />
                 <div style={{ flexGrow: 1 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span className="status-indicator delivered">{ord.status}</span>
+                    <span 
+                      className="status-indicator"
+                      style={{
+                        background: ord.status === "Cancelled" ? "rgba(231,76,60,0.1)" : 
+                                    ord.status === "Shipped" || ord.status === "Delivered" ? "rgba(39,174,96,0.1)" : 
+                                    ord.status === "Pending" ? "rgba(241,196,15,0.15)" : "rgba(44,27,13,0.08)",
+                        color: ord.status === "Cancelled" ? "#e74c3c" : 
+                               ord.status === "Shipped" || ord.status === "Delivered" ? "#27ae60" : 
+                               ord.status === "Pending" ? "#d35400" : "#2c1b0d",
+                      }}
+                    >
+                      {ord.status || "Received"}
+                    </span>
                     <strong style={{ fontSize: "14.5px", color: "#2c1b0d" }}>{ord.total}</strong>
                   </div>
                   
@@ -141,10 +139,31 @@ export default function OrdersPage() {
                     <p>🛍️ Blend Items: <strong>{ord.item}</strong></p>
                   </div>
 
-                  <div className="card-action-row" style={{ marginTop: "20px" }}>
-                    <Link href={`/orders/${ord.id}`} className="card-btn primary full-width-btn">
+                  <div className="card-action-row" style={{ marginTop: "20px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                    <Link href={`/orders/${ord.id}`} className="card-btn primary full-width-btn" style={{ marginBottom: "10px" }}>
                       View Order Invoice & Tracking →
                     </Link>
+
+                    {(ord.status === "Received" || !ord.status) && (
+                      <>
+                        <button onClick={() => updateOrder(ord.id, { status: "Cancelled" })} className="card-btn secondary" style={{ color: "#e74c3c", border: "1px solid #e74c3c" }}>
+                          Reject
+                        </button>
+                        <button onClick={() => updateOrder(ord.id, { status: "Pending" })} className="card-btn primary" style={{ background: "#27ae60" }}>
+                          Accept & Prepare
+                        </button>
+                      </>
+                    )}
+                    {(ord.status === "Pending" || ord.status === "Preparing") && (
+                      <button onClick={() => updateOrder(ord.id, { status: "Shipped" })} className="card-btn primary" style={{ background: "#f39c12" }}>
+                        Ready to Dispatch
+                      </button>
+                    )}
+                    {(ord.status === "Shipped" || ord.status === "In Transit") && (
+                      <button onClick={() => updateOrder(ord.id, { status: "Delivered" })} className="card-btn primary" style={{ background: "#8a583c" }}>
+                        Mark Delivered
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

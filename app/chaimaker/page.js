@@ -2,12 +2,55 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { db, auth } from "@/lib/firebase";
+import { collection, onSnapshot, addDoc } from "firebase/firestore";
+import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
+import { onOrdersSnapshot, getSubscriptions, updateSubscription, updateOrder, addRestockRequest, onRestockRequestsSnapshot, onLeaveRequestsSnapshot, addLeaveRequest, getProfileSettings, updateProfileSettings } from "@/lib/firestore";
+import { loginWithEmail } from "@/lib/auth";
 
 export default function AdminDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
+
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage("Error: New passwords do not match.");
+      return;
+    }
+    if (!newPassword || newPassword.length < 6) {
+      setPasswordMessage("Error: Password must be at least 6 characters.");
+      return;
+    }
+    try {
+      if (auth.currentUser) {
+        const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+        await reauthenticateWithCredential(auth.currentUser, credential);
+        
+        await updatePassword(auth.currentUser, newPassword);
+        setPasswordMessage("Password updated successfully!");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setTimeout(() => setPasswordMessage(""), 3000);
+      } else {
+        setPasswordMessage("Error: User not logged in.");
+      }
+    } catch (err) {
+      console.error(err);
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+        setPasswordMessage("Error: Incorrect current password.");
+      } else {
+        setPasswordMessage("Error updating password: " + err.message);
+      }
+    }
+  };
 
   // Tabs State (1st tab is Dashboard)
   const [activeTab, setActiveTab] = useState("dashboard"); 
@@ -16,83 +59,8 @@ export default function AdminDashboard() {
   const [isOnline, setIsOnline] = useState(true);
 
   // Active Orders Queue with detailed fields (including office number, product image, details, priority, createdAt, allocatedTime)
-  const [orders, setOrders] = useState([
-    {
-      id: "#10234",
-      customer: "John Bike Parts",
-      date: "09/12/2026",
-      status: "Shipped",
-      total: "₹1,200",
-      item: "Classic Masala Chai x8",
-      office: "Suite 302, Building A",
-      sugar: "Normal Sugar",
-      milk: "Whole Milk",
-      img: "https://i.pinimg.com/736x/82/64/80/8264808f4840845e96abc7f7ec60b82f.jpg",
-      priority: "Normal",
-      createdAt: Date.now() - 3600000, // 1 hour ago
-      allocatedTime: "30 mins",
-    },
-    {
-      id: "#10235",
-      customer: "Elite Cycling Co.",
-      date: "09/11/2026",
-      status: "Pending",
-      total: "₹3,600",
-      item: "Saffron Royal Chai x12",
-      office: "Floor 4, Conference Room B",
-      sugar: "Mild Sugar",
-      milk: "Oat Milk",
-      img: "https://i.pinimg.com/736x/21/74/32/2174329b8ef1603c1cbc68bd9ef5865a.jpg",
-      priority: "High",
-      createdAt: Date.now() - 1800000, // 30 mins ago
-      allocatedTime: "40 mins",
-    },
-    {
-      id: "#10236",
-      customer: "SpeedWheels",
-      date: "09/10/2026",
-      status: "Delivered",
-      total: "₹2,800",
-      item: "Ginger Chai x10",
-      office: "Cabin 12, Floor 5",
-      sugar: "No Sugar",
-      milk: "Almond Milk",
-      img: "https://i.pinimg.com/736x/95/d1/9a/95d19a7cad652dd1caceb091c9794ac9.jpg",
-      priority: "Normal",
-      createdAt: Date.now() - 7200000, // 2 hours ago
-      allocatedTime: "35 mins",
-    },
-    {
-      id: "#10239",
-      customer: "Vikram R.",
-      date: "09/12/2026",
-      status: "Received",
-      total: "₹380",
-      item: "Kashmiri Kahwa x2",
-      office: "Office 402, Block B",
-      sugar: "Normal Sweet",
-      milk: "Black Chai",
-      img: "https://i.pinimg.com/736x/c4/a8/cc/c4a8ccde9a67e5f24e2be4d0621f4186.jpg",
-      priority: "High",
-      createdAt: Date.now() - 480000, // 8 mins ago
-      allocatedTime: "",
-    },
-    {
-      id: "#10240",
-      customer: "Sneha K.",
-      date: "09/12/2026",
-      status: "Received",
-      total: "₹169",
-      item: "Ginger (Adrak) Chai x1",
-      office: "Office 105, Ground Floor",
-      sugar: "No Sugar",
-      milk: "Almond Milk",
-      img: "/chai-ingredients.png",
-      priority: "Normal",
-      createdAt: Date.now() - 120000, // 2 mins ago
-      allocatedTime: "",
-    },
-  ]);
+  const [orders, setOrders] = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
 
   // Today's Prep Tally
   const todayTally = {
@@ -108,14 +76,7 @@ export default function AdminDashboard() {
     { floor: "Floor 3", items: "3x Ginger Chai, 4x Cookies", status: "Medium Demand" },
   ];
 
-  // Stock
-  const [stocks, setStocks] = useState([
-    { name: "Assam Loose Tea Leaves", qty: "45 Kg Remaining", level: "In Stock", unitPrice: 350, unit: "Kg", supplier: "Jaipur Spices Ltd (+91 99999 11111)" },
-    { name: "Fresh Ginger Roots", qty: "12 Kg Remaining", level: "Low Stock", unitPrice: 120, unit: "Kg", supplier: "Alwar Organic Farms (+91 88888 22222)" },
-    { name: "Green Cardamom Elaichi Pods", qty: "2.5 Kg Remaining", level: "Low Stock", unitPrice: 1800, unit: "Kg", supplier: "Kerala Plantation Direct (+91 77777 33333)" },
-    { name: "Organic Kashmiri Saffron", qty: "80 Grams Remaining", level: "Low Stock", unitPrice: 280, unit: "Grams", supplier: "Pampore Saffron Valley (+91 66666 44444)" },
-    { name: "Whole Milk Cartons", qty: "5 Ltrs Remaining", level: "Out of Stock", unitPrice: 65, unit: "Ltrs", supplier: "Jaipur Dairy Co-op (+91 55555 55555)" },
-  ]);
+  const [stocks, setStocks] = useState([]);
 
   // Auto alerts and restock logs
   const [autoAlertEnabled, setAutoAlertEnabled] = useState(true);
@@ -133,6 +94,29 @@ export default function AdminDashboard() {
   const [urgency, setUrgency] = useState("Medium");
   const [requestNotes, setRequestNotes] = useState("");
   const [toastMsg, setToastMsg] = useState("");
+  const [showPendingSidebar, setShowPendingSidebar] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notifications = orders
+    .filter(o => o.status === "Received" || o.status === "Pending" || o.status === "Preparing")
+    .map(o => ({
+      id: o.id,
+      text: `Order ${o.id} - ${o.item}`,
+      time: o.date
+    }));
+
+  useEffect(() => {
+    async function loadProfile() {
+      const data = await getProfileSettings();
+      if (data) {
+        if (data.brewmasterName) setBrewmasterName(data.brewmasterName);
+        if (data.brewmasterContact) setBrewmasterContact(data.brewmasterContact);
+        if (data.brewmasterBio) setBrewmasterBio(data.brewmasterBio);
+        if (data.shopName) setShopName(data.shopName);
+        if (data.workingHours) setWorkingHours(data.workingHours);
+      }
+    }
+    loadProfile();
+  }, []);
 
   // Add new stock item form state
   const [newStockName, setNewStockName] = useState("");
@@ -150,14 +134,35 @@ export default function AdminDashboard() {
     { name: "Elite Cycling Co.", orders: 15, lastOrder: "09/11/2026", loyalty: "Platinum" },
   ];
 
-  // Earnings Summary Stats
+  const filteredOrders = orders.filter(o => {
+    if (!o.createdAt) return true;
+    const now = Date.now();
+    const diff = now - o.createdAt;
+    if (timeFilter === "Daily") return diff <= 24 * 60 * 60 * 1000;
+    if (timeFilter === "Weekly") return diff <= 7 * 24 * 60 * 60 * 1000;
+    if (timeFilter === "Monthly") return diff <= 30 * 24 * 60 * 60 * 1000;
+    return true;
+  });
+
+  const totalOrdersCount = filteredOrders.length;
+  const completedOrdersCount = filteredOrders.filter(o => o.status === "Delivered" || o.status === "Completed").length;
+  const pendingOrdersCount = filteredOrders.filter(o => o.status === "Received" || o.status === "Pending" || o.status === "Preparing").length;
+
   const statsSummary = {
-    
-    totalOrders: "450 orders",
-    deliveryShipment: "560 Delivery",
-    pendingShipment: "25 orders",
-    
+    totalOrders: `${totalOrdersCount} orders`,
+    deliveryShipment: `${completedOrdersCount} Delivery`,
+    pendingShipment: `${pendingOrdersCount} orders`,
   };
+
+  const itemCounts = {};
+  orders.forEach(o => {
+    const name = o.item || "Chai Selection";
+    itemCounts[name] = (itemCounts[name] || 0) + 1;
+  });
+  const sortedItems = Object.entries(itemCounts).sort((a, b) => b[1] - a[1]);
+  const topItem1 = sortedItems[0] ? `${sortedItems[0][0]} (${sortedItems[0][1]} units)` : "Classic Masala Chai (0 units)";
+  const topItem2 = sortedItems[1] ? `${sortedItems[1][0]} (${sortedItems[1][1]} units)` : "Saffron Royal Chai (0 units)";
+  const topItem3 = sortedItems[2] ? `${sortedItems[2][0]} (${sortedItems[2][1]} units)` : "Ginger Chai (0 units)";
 
   const todaySettlements = [
     { item: "Classic Masala Chai (24 units)", value: "₹3,576" },
@@ -166,12 +171,21 @@ export default function AdminDashboard() {
     { item: "Almond Cookies (30 units)", value: "₹1,500" },
   ];
 
-  const historyOrders = [
-    { id: "#10230", customer: "Aarav Mehta", status: "Delivered", date: "09/12/2026 11:20 AM", items: "2x Classic Masala Chai", customization: "Oat Milk, Low Sugar", office: "Office 402, Floor 4" },
-    { id: "#10231", customer: "Priya Patel", status: "Delivered", date: "09/12/2026 10:45 AM", items: "1x Saffron Royal Chai, 2x Ginger Chai", customization: "Mild Sugar, Cardamom", office: "Office 512, Floor 5" },
-    { id: "#10232", customer: "Rohan Sharma", status: "Cancelled", date: "09/11/2026 04:15 PM", items: "1x Ginger (Adrak) Chai", customization: "No Sugar", office: "Office 301, Floor 3" },
-    { id: "#10233", customer: "Karan Johar", status: "Delivered", date: "09/11/2026 02:30 PM", items: "2x Kashmiri Kahwa, 1x Saffron Royal Chai", customization: "Whole Milk, High Sweetness", office: "Office 508, Floor 5" },
-  ];
+  const historyOrders = orders.map((o) => {
+    const customizations = [];
+    if (o.sugar) customizations.push(`Sugar: ${o.sugar}`);
+    if (o.milk) customizations.push(`Milk: ${o.milk}`);
+    
+    return {
+      id: o.id.startsWith("#") ? o.id : `#${o.id.replace("CHAI-ORD-", "")}`,
+      customer: o.customer || "Loyal Customer",
+      status: o.status || "Received",
+      date: o.date || "Just now",
+      items: o.item || "Chai Selection",
+      customization: customizations.join(", ") || "Standard Recipe",
+      office: o.office || "General Area"
+    };
+  });
 
   // Menu items
   const [menuItems, setMenuItems] = useState([
@@ -303,29 +317,74 @@ export default function AdminDashboard() {
     if (savedLogin === "true") {
       setIsLoggedIn(true);
     }
+    let prevOrderIds = [];
+    const unsubOrders = onOrdersSnapshot((data) => {
+      const currentPending = data.filter(o => o.status === "Received" || o.status === "Pending");
+      const newOrders = currentPending.filter(o => !prevOrderIds.includes(o.id));
+      if (newOrders.length > 0 && prevOrderIds.length > 0) {
+        newOrders.forEach(o => {
+          const speakText = `New order received from ${o.customer || "a customer"} for ${o.item || "Chai"}`;
+          if (typeof window !== "undefined" && window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(speakText);
+            utterance.rate = 1.0;
+            window.speechSynthesis.speak(utterance);
+          }
+          setIncomingOrder(o);
+          setToastMsg(`🚨 New Request: ${o.item || "Chai"}!`);
+          setTimeout(() => setToastMsg(""), 5000);
+        });
+      }
+      prevOrderIds = data.map(o => o.id);
+      setOrders(data);
+    });
+    const unsubSubs = onSnapshot(collection(db, "subscriptions"), (snap) => {
+      const items = [];
+      snap.forEach((d) => items.push({ ...d.data(), id: d.id }));
+      items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      setSubscriptions(items);
+    });
+    const unsubStock = onSnapshot(collection(db, "stock"), (snap) => {
+      const items = [];
+      snap.forEach((d) => items.push({ ...d.data(), id: d.id }));
+      setStocks(items);
+    });
+    const unsubRestock = onRestockRequestsSnapshot((data) => {
+      setRestockRequests(data);
+    });
+    const unsubLeave = onLeaveRequestsSnapshot((data) => {
+      setLeaveRequests(data);
+    });
+    return () => {
+      unsubOrders();
+      unsubSubs();
+      unsubStock();
+      unsubRestock();
+      unsubLeave();
+    };
   }, []);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTimeTick((prev) => prev + 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const allocateTime = (id, timeVal) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, allocatedTime: timeVal } : o))
-    );
+  const allocateTime = async (id, timeVal) => {
+    try {
+      await updateOrder(id, { allocatedTime: timeVal });
+    } catch (err) {
+      console.error("Error allocating time:", err);
+    }
   };
 
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    if (username === "brewmaster" && password === "chai") {
+    if (username !== "brewmaster@gmail.com") {
+      setLoginError("Access Denied: Only brewmaster@gmail.com is allowed.");
+      return;
+    }
+    try {
+      await loginWithEmail(username, password);
       setIsLoggedIn(true);
       localStorage.setItem("brewmaster_logged", "true");
       setLoginError("");
-    } else {
-      setLoginError("Invalid credentials. Hint: brewmaster / chai");
+    } catch (err) {
+      setLoginError(err.message || "Invalid credentials.");
     }
   };
 
@@ -397,46 +456,47 @@ export default function AdminDashboard() {
     }, 1000);
   };
 
-  const acceptOrderAlert = () => {
+  const acceptOrderAlert = async () => {
     stopAlertRinging();
     if (incomingOrder) {
-      setOrders((prev) => [
-        ...prev,
-        {
-          id: incomingOrder.id,
-          customer: incomingOrder.customer,
-          date: "Just now",
-          status: "Received",
-          total: incomingOrder.price,
-          item: incomingOrder.item,
-          office: incomingOrder.office,
-          sugar: incomingOrder.sugar,
-          milk: incomingOrder.milk,
-          img: incomingOrder.img,
-        },
-      ]);
+      try {
+        await updateOrder(incomingOrder.id, { status: "Preparing" });
+      } catch(err) {
+        console.error(err);
+      }
     }
     setIncomingOrder(null);
   };
 
-  const rejectOrderAlert = () => {
+  const rejectOrderAlert = async () => {
     stopAlertRinging();
+    if (incomingOrder) {
+      try {
+        await updateOrder(incomingOrder.id, { status: "Cancelled" });
+      } catch(err) {
+        console.error(err);
+      }
+    }
     setIncomingOrder(null);
   };
 
-  const acceptSpecificOrder = (id) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, status: "Pending" } : o))
-    );
+  const acceptSpecificOrder = async (id) => {
+    try {
+      await updateOrder(id, { status: "Pending" });
+    } catch (err) {
+      console.error("Error accepting order:", err);
+    }
   };
 
-  const rejectSpecificOrder = (id) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, status: "Cancelled" } : o))
-    );
+  const rejectSpecificOrder = async (id) => {
+    try {
+      await updateOrder(id, { status: "Cancelled" });
+    } catch (err) {
+      console.error("Error rejecting order:", err);
+    }
   };
 
-  const handleRaiseAlert = (e) => {
+  const handleRaiseAlert = async (e) => {
     e.preventDefault();
     if (!requestQty) return;
     const newReq = {
@@ -444,13 +504,18 @@ export default function AdminDashboard() {
       qty: requestQty,
       urgency: urgency,
       notes: requestNotes || "No notes",
-      date: "Just now",
+      date: new Date().toLocaleDateString("en-IN") + " " + new Date().toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit' }),
       status: "Sent to Admin"
     };
-    setRestockRequests((prev) => [newReq, ...prev]);
-    setToastMsg(`🚨 Restock alert for "${selectedItem}" has been sent to the Admin!`);
-    setRequestQty("");
-    setRequestNotes("");
+    try {
+      await addRestockRequest(newReq);
+      setToastMsg(`🚨 Restock alert for "${selectedItem}" has been sent to the Admin!`);
+      setRequestQty("");
+      setRequestNotes("");
+    } catch(err) {
+      console.error(err);
+      setToastMsg("Error sending request.");
+    }
     setTimeout(() => setToastMsg(""), 4500);
   };
 
@@ -548,15 +613,8 @@ export default function AdminDashboard() {
             {/* Toggle Priority Button: High -> Normal -> Low -> High */}
             <button
               onClick={() => {
-                setOrders((prev) =>
-                  prev.map((item) => {
-                    if (item.id === o.id) {
-                      const nextLvl = item.priority === "High" ? "Normal" : item.priority === "Normal" ? "Low" : "High";
-                      return { ...item, priority: nextLvl };
-                    }
-                    return item;
-                  })
-                );
+                const nextLvl = o.priority === "High" ? "Normal" : o.priority === "Normal" ? "Low" : "High";
+                updateOrder(o.id, { priority: nextLvl });
               }}
               style={{
                 background: "rgba(44,27,13,0.05)",
@@ -615,7 +673,7 @@ export default function AdminDashboard() {
 
           <select
             value={o.allocatedTime || ""}
-            onChange={(e) => allocateTime(o.id, e.target.value)}
+            onChange={(e) => updateOrder(o.id, { allocatedTime: e.target.value })}
             style={{
               background: "#ffffff",
               border: "1px solid rgba(44,27,13,0.15)",
@@ -641,43 +699,38 @@ export default function AdminDashboard() {
             {/* Amount Total removed for Brewmaster */}
           </div>
 
-          <div style={{ display: "flex", gap: "8px" }}>
-            {o.status === "Received" && (
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: "11px", fontWeight: "bold", color: "#888", marginRight: "auto" }}>
+              Status: {o.status || "Received"}
+            </span>
+            {(o.status === "Received" || !o.status) && (
               <>
-                <button onClick={() => rejectSpecificOrder(o.id)} className="btn-action-outline reject">
+                <button onClick={() => rejectSpecificOrder(o.id)} style={{ background: "transparent", color: "#e74c3c", border: "1px solid #e74c3c", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: "bold", cursor: "pointer" }}>
                   Reject
                 </button>
-                <button onClick={() => acceptSpecificOrder(o.id)} className="btn-action-fill accept">
+                <button onClick={() => acceptSpecificOrder(o.id)} style={{ background: "#27ae60", color: "#ffffff", border: "none", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: "bold", cursor: "pointer" }}>
                   Accept & Prepare
                 </button>
               </>
             )}
-            {o.status === "Pending" && (
+            {(o.status === "Pending" || o.status === "Preparing") && (
               <button
-                onClick={() => {
-                  setOrders((prev) =>
-                    prev.map((item) => (item.id === o.id ? { ...item, status: "Shipped" } : item))
-                  );
-                }}
-                className="btn-action-fill dispatch"
+                onClick={() => updateOrder(o.id, { status: "Shipped" })}
+                style={{ background: "#f39c12", color: "#ffffff", border: "none", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: "bold", cursor: "pointer" }}
               >
                 Ready to Dispatch
               </button>
             )}
-            {o.status === "Shipped" && (
+            {(o.status === "Shipped" || o.status === "In Transit") && (
               <button
-                onClick={() => {
-                  setOrders((prev) =>
-                    prev.map((item) => (item.id === o.id ? { ...item, status: "Delivered" } : item))
-                  );
-                }}
-                className="btn-action-fill complete"
+                onClick={() => updateOrder(o.id, { status: "Delivered" })}
+                style={{ background: "#8a583c", color: "#ffffff", border: "none", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: "bold", cursor: "pointer" }}
               >
-                Complete Delivery
+                Mark Delivered
               </button>
             )}
             {o.status === "Delivered" && (
-              <span className="served-status-success-badge">✓ Served</span>
+              <span style={{ background: "rgba(39,174,96,0.1)", color: "#27ae60", padding: "4px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: "bold" }}>✓ Delivered</span>
             )}
             {o.status === "Cancelled" && (
               <span style={{ fontSize: "12px", color: "#e74c3c", fontWeight: "bold" }}>✕ Cancelled</span>
@@ -724,6 +777,42 @@ export default function AdminDashboard() {
     .filter((o) => o.status === "Received")
     .sort((a, b) => a.id.localeCompare(b.id));
 
+  const toggleSubscriptionStatus = async (sub) => {
+    const newStatus = sub.status === "Active" ? "Paused" : "Active";
+    try {
+      await updateSubscription(sub.id, { status: newStatus });
+      setToastMsg(`Subscription status updated to ${newStatus}!`);
+      setTimeout(() => setToastMsg(""), 3000);
+    } catch (err) {
+      setToastMsg(`Error updating subscription: ${err.message}`);
+      setTimeout(() => setToastMsg(""), 3000);
+    }
+  };
+
+  const forceDispatchSubscription = async (sub) => {
+    const newOrder = {
+      customer: sub.customer || "Subscription Client",
+      item: sub.items || "Classic Masala Chai",
+      price: "₹0",
+      priceNum: 0,
+      status: "Received",
+      date: new Date().toLocaleDateString("en-IN") + " " + new Date().toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit' }),
+      sugar: sub.sugar || "Medium Sugar",
+      milk: sub.milk || "Whole Milk",
+      office: sub.office || "Desk Area",
+      isSubscription: true,
+      subscriptionId: sub.id
+    };
+    try {
+      await addDoc(collection(db, "orders"), newOrder);
+      setToastMsg(`🚀 Dispatched subscription order for ${sub.customer}!`);
+      setTimeout(() => setToastMsg(""), 3000);
+    } catch (err) {
+      setToastMsg(`Error dispatching: ${err.message}`);
+      setTimeout(() => setToastMsg(""), 3000);
+    }
+  };
+
   return (
     <div style={{ background: "#fcfaf7", minHeight: "100vh", color: "#2c1b0d", fontFamily: "var(--font-body)", overflowX: "hidden" }}>
       
@@ -737,10 +826,10 @@ export default function AdminDashboard() {
             {loginError && <div className="login-error-alert">{loginError}</div>}
 
             <div className="form-group">
-              <label>Operator Username</label>
+              <label>Operator Email</label>
               <input
-                type="text"
-                placeholder="Username (e.g. brewmaster)"
+                type="email"
+                placeholder="Email (e.g. brewmaster@gmail.com)"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -752,7 +841,7 @@ export default function AdminDashboard() {
               <label>Operator Password</label>
               <input
                 type="password"
-                placeholder="Password (e.g. chai)"
+                placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -786,23 +875,14 @@ export default function AdminDashboard() {
               <button onClick={() => setActiveTab("queue")} className={`menu-icon-btn ${activeTab === "queue" ? "active" : ""}`}>
                 <span className="btn-emoji">📥</span> Order Queue
               </button>
-              <button onClick={() => setActiveTab("prep")} className={`menu-icon-btn ${activeTab === "prep" ? "active" : ""}`}>
-                <span className="btn-emoji">⚡</span> Today's Prep
-              </button>
               <button onClick={() => setActiveTab("stock")} className={`menu-icon-btn ${activeTab === "stock" ? "active" : ""}`}>
                 <span className="btn-emoji">📦</span> Stock & Alerts
               </button>
               <button onClick={() => setActiveTab("history")} className={`menu-icon-btn ${activeTab === "history" ? "active" : ""}`}>
                 <span className="btn-emoji">📜</span> Order History
               </button>
-              <button onClick={() => setActiveTab("menu")} className={`menu-icon-btn ${activeTab === "menu" ? "active" : ""}`}>
-                <span className="btn-emoji">🍽️</span> Menu Catalog
-              </button>
               <button onClick={() => setActiveTab("subs")} className={`menu-icon-btn ${activeTab === "subs" ? "active" : ""}`}>
                 <span className="btn-emoji">📅</span> Subscriptions Due
-              </button>
-              <button onClick={() => setActiveTab("feedback")} className={`menu-icon-btn ${activeTab === "feedback" ? "active" : ""}`}>
-                <span className="btn-emoji">⭐</span> Ratings & Feedback
               </button>
               <button onClick={() => setActiveTab("leave")} className={`menu-icon-btn ${activeTab === "leave" ? "active" : ""}`}>
                 <span className="btn-emoji">🚪</span> Leave & Shift
@@ -820,13 +900,20 @@ export default function AdminDashboard() {
           </aside>
 
           {/* MAIN CONTAINER */}
-          <div className="dashboard-container">
+          <div 
+            className="dashboard-container"
+            style={{ 
+              marginRight: "0", 
+              width: "calc(100% - 200px)",
+              transition: "all 0.3s ease-in-out"
+            }}
+          >
             
             {/* TOP HEADER */}
             <header className="dashboard-header-new">
               <div>
                 <span className="welcome-label">Welcome!</span>
-                <h1 className="operator-title">John Hardward</h1>
+                <h1 className="operator-title">{brewmasterName}</h1>
               </div>
 
               <div className="header-search-box-wrap">
@@ -834,14 +921,53 @@ export default function AdminDashboard() {
                 <input type="text" placeholder="Search Here" className="search-input-new" />
               </div>
 
-              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                <button onClick={triggerMockOrderAlert} className="alert-bell-btn" title="Simulate Alarm">
-                  🔔
+              <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+                <button 
+                  onClick={() => setShowPendingSidebar(!showPendingSidebar)} 
+                  style={{ 
+                    background: "#2c1b0d", 
+                    color: "#ffffff", 
+                    border: "none", 
+                    padding: "10px 18px", 
+                    borderRadius: "20px", 
+                    fontWeight: "bold", 
+                    fontSize: "12.5px", 
+                    cursor: "pointer", 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: "8px",
+                    boxShadow: "0 4px 10px rgba(44, 27, 13, 0.15)"
+                  }}
+                >
+                  <span style={{ display: "inline-block" }}>📋</span> Pending Requests ({pendingSidebarOrders.length})
                 </button>
+
+                <div style={{ position: "relative" }}>
+                  <button onClick={() => setShowNotifications(!showNotifications)} className="alert-bell-btn" title="Simulate Alarm" style={{ border: "none", background: "transparent", fontSize: "18px", cursor: "pointer" }}>
+                    🔔
+                  </button>
+                  {showNotifications && (
+                    <div style={{ position: "absolute", top: "100%", right: "0", background: "#fff", border: "1px solid rgba(0,0,0,0.1)", borderRadius: "12px", width: "250px", padding: "12px", boxShadow: "0 10px 20px rgba(0,0,0,0.1)", zIndex: 100 }}>
+                      <h4 style={{ margin: "0 0 10px", fontSize: "14px" }}>Notifications</h4>
+                      {notifications.length === 0 ? (
+                        <p style={{ fontSize: "12px", color: "#666" }}>No new notifications.</p>
+                      ) : (
+                        notifications.map(n => (
+                          <div key={n.id} style={{ padding: "8px 0", borderBottom: "1px solid #eee" }}>
+                            <div style={{ fontSize: "12px", color: "#333" }}>{n.text}</div>
+                            <div style={{ fontSize: "10px", color: "#888", marginTop: "2px" }}>{n.time}</div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
                 <img
                   src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"
                   alt="Profile"
                   className="profile-avatar-new"
+                  onClick={() => setActiveTab("profile")}
+                  style={{ cursor: "pointer" }}
                 />
               </div>
             </header>
@@ -858,7 +984,21 @@ export default function AdminDashboard() {
                   </div>
 
                   <div className="subheader-controls">
-                    <button className="btn-export-data">
+                    <button 
+                      className="btn-export-data"
+                      onClick={() => {
+                        const csvContent = "data:text/csv;charset=utf-8," + 
+                          "Order ID,Customer,Status,Total,Item,Date\n" +
+                          filteredOrders.map(o => `${o.id},${o.customer || "N/A"},${o.status || "N/A"},${o.total || "0"},"${o.item || "N/A"}","${o.date || "N/A"}"`).join("\n");
+                        const encodedUri = encodeURI(csvContent);
+                        const link = document.createElement("a");
+                        link.setAttribute("href", encodedUri);
+                        link.setAttribute("download", `chaimaker_orders_${timeFilter.toLowerCase()}.csv`);
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }}
+                    >
                       📤 Export Data
                     </button>
                     
@@ -918,9 +1058,9 @@ export default function AdminDashboard() {
                       <span className="payout-status-badge">Monthly ∨</span>
                     </div>
                     <div className="performance-tally-pills">
-                      <span className="tally-pill red">Cranksets <strong style={{ marginLeft: "6px" }}>1,200 units</strong></span>
-                      <span className="tally-pill yellow">Pedals <strong style={{ marginLeft: "6px" }}>1,000 units</strong></span>
-                      <span className="tally-pill green">Brakes <strong style={{ marginLeft: "6px" }}>800 units</strong></span>
+                      <span className="tally-pill red">🥇 {topItem1}</span>
+                      <span className="tally-pill yellow">🥈 {topItem2}</span>
+                      <span className="tally-pill green">🥉 {topItem3}</span>
                     </div>
 
                     <div className="bar-chart-performance-visual">
@@ -1052,47 +1192,7 @@ export default function AdminDashboard() {
             {activeTab === "queue" && (
               <div className="tab-body-wrapper">
                 
-                {/* Summary of Active Brews on Top */}
-                <div style={{ background: "#ffffff", padding: "20px", borderRadius: "24px", border: "1px solid rgba(44, 27, 13, 0.06)", marginBottom: "28px" }}>
-                  <h4 style={{ margin: "0 0 16px", fontSize: "14px", fontWeight: "800", color: "#2c1b0d" }}>📊 Live Queue Tally (Total Brew Volume)</h4>
-                  
-                  <div style={{ display: "flex", gap: "16px", overflowX: "auto", paddingBottom: "10px" }}>
-                    {Object.entries(totalBrewsSummary).map(([name, qty]) => {
-                      const imgUrl = itemImages[name] || "/chai-ingredients.png";
-                      return (
-                        <div key={name} style={{ display: "flex", alignItems: "center", gap: "12px", background: "#fbf9f6", padding: "10px 16px", borderRadius: "16px", border: "1px solid rgba(0,0,0,0.03)", flexShrink: 0 }}>
-                          <img src={imgUrl} alt={name} style={{ width: "44px", height: "44px", borderRadius: "8px", objectFit: "cover" }} />
-                          <div>
-                            <strong style={{ fontSize: "15px", color: "#2c1b0d" }}>{qty} Cups</strong>
-                            <span style={{ display: "block", fontSize: "11px", color: "#666" }}>{name}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {/* Add-ons Tally */}
-                    <div style={{ display: "flex", alignItems: "center", gap: "12px", background: "rgba(138, 88, 60, 0.05)", padding: "10px 16px", borderRadius: "16px", border: "1px solid rgba(138, 88, 60, 0.1)", flexShrink: 0 }}>
-                      <span style={{ fontSize: "20px" }}>🌾</span>
-                      <div>
-                        <strong style={{ fontSize: "14px", color: "#2c1b0d" }}>Add-on Milk Base</strong>
-                        <span style={{ display: "block", fontSize: "11px", color: "#666" }}>
-                          Oat: {addOnsSummary["Oat Milk"] || 0} | Almond: {addOnsSummary["Almond Milk"] || 0}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: "12px", background: "rgba(138, 88, 60, 0.05)", padding: "10px 16px", borderRadius: "16px", border: "1px solid rgba(138, 88, 60, 0.1)", flexShrink: 0 }}>
-                      <span style={{ fontSize: "20px" }}>🍬</span>
-                      <div>
-                        <strong style={{ fontSize: "14px", color: "#2c1b0d" }}>Custom Sugar Levels</strong>
-                        <span style={{ display: "block", fontSize: "11px", color: "#666" }}>
-                          No Sugar: {addOnsSummary["No Sugar"] || 0} | Mild: {addOnsSummary["Mild Sugar"] || 0}
-                        </span>
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
+                {/* Summary of Active Brews on Top - Removed per user request */}
 
                 <h3 className="section-title">Active Brewing Priority Board</h3>
 
@@ -1161,140 +1261,6 @@ export default function AdminDashboard() {
             )}
 
             {/* OTHER OPERATIONAL TABS */}
-            {activeTab === "prep" && (
-              <div className="tab-body-wrapper">
-                
-                {/* Stats Header Row */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px", marginBottom: "28px" }}>
-                  <div style={{ background: "#ffffff", padding: "20px", borderRadius: "16px", border: "1px solid rgba(44, 27, 13, 0.04)" }}>
-                    <span style={{ fontSize: "11px", color: "#666", display: "block" }}>☕ Total Beverage Tally</span>
-                    <strong style={{ fontSize: "22px", color: "#2c1b0d" }}>78 Cups Required</strong>
-                  </div>
-                  <div style={{ background: "#ffffff", padding: "20px", borderRadius: "16px", border: "1px solid rgba(44, 27, 13, 0.04)" }}>
-                    <span style={{ fontSize: "11px", color: "#666", display: "block" }}>🏢 Route Groups (Floors)</span>
-                    <strong style={{ fontSize: "22px", color: "#2c1b0d" }}>3 Office Floors</strong>
-                  </div>
-                  <div style={{ background: "#ffffff", padding: "20px", borderRadius: "16px", border: "1px solid rgba(44, 27, 13, 0.04)" }}>
-                    <span style={{ fontSize: "11px", color: "#666", display: "block" }}>🕒 Next Peak Rush Prediction</span>
-                    <strong style={{ fontSize: "16px", color: "#e74c3c", display: "block", marginTop: "4px" }}>9:00 - 9:30 AM (Pre-brew 20c)</strong>
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "28px" }}>
-                  
-                  {/* Left Column: Detailed Beverage prep cards */}
-                  <div>
-                    <h3 className="section-title">Today's Cooking Prep Tally</h3>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
-                      {[
-                        {
-                          name: "Classic Masala Chai",
-                          qty: 24,
-                          brewed: 18,
-                          img: "https://i.pinimg.com/736x/82/64/80/8264808f4840845e96abc7f7ec60b82f.jpg",
-                          recipe: "Assam base + crushed winter spices + whole milk",
-                        },
-                        {
-                          name: "Cardamom (Elaichi) Chai",
-                          qty: 18,
-                          brewed: 14,
-                          img: "https://i.pinimg.com/1200x/5c/b8/8a/5cb88a02e013987379378009ba8d7eb2.jpg",
-                          recipe: "Elaichi pods + CTC tea + whole milk + low sugar",
-                        },
-                        {
-                          name: "Ginger (Adrak) Chai",
-                          qty: 15,
-                          brewed: 9,
-                          img: "https://i.pinimg.com/736x/95/d1/9a/95d19a7cad652dd1caceb091c9794ac9.jpg",
-                          recipe: "Fresh farm grated ginger + CTC granules + light milk",
-                        },
-                        {
-                          name: "Saffron Royal Chai",
-                          qty: 9,
-                          brewed: 5,
-                          img: "https://i.pinimg.com/736x/21/74/32/2174329b8ef1603c1cbc68bd9ef5865a.jpg",
-                          recipe: "Luxury Kashmiri saffron + cardamoms + thick milk base",
-                        },
-                        {
-                          name: "Kashmiri Kahwa",
-                          qty: 12,
-                          brewed: 8,
-                          img: "https://i.pinimg.com/736x/c4/a8/cc/c4a8ccde9a67e5f24e2be4d0621f4186.jpg",
-                          recipe: "Green tea leaves + saffron strands + cinnamon + almond slivers",
-                        },
-                      ].map((item, idx) => {
-                        const progress = (item.brewed / item.qty) * 100;
-                        return (
-                          <div key={idx} className="queue-card-detailed-item" style={{ background: "#ffffff", padding: "18px" }}>
-                            <div style={{ display: "flex", gap: "12px", alignItems: "flex-start", marginBottom: "12px" }}>
-                              <img src={item.img} alt={item.name} className="queue-card-thumbnail" style={{ width: "56px", height: "56px" }} />
-                              <div>
-                                <h4 style={{ fontSize: "14px", margin: "0 0 4px" }}>{item.name}</h4>
-                                <span style={{ fontSize: "10px", color: "#777", display: "block" }}>{item.recipe}</span>
-                              </div>
-                            </div>
-
-                            <div style={{ margin: "10px 0" }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "4px" }}>
-                                <span>Progress (Brewed)</span>
-                                <strong>{item.brewed} / {item.qty} cups</strong>
-                              </div>
-                              <div className="inventory-progress-bar-wrap" style={{ background: "rgba(44, 27, 13, 0.05)", height: "6px" }}>
-                                <div className="inventory-progress-bar-fill" style={{ width: `${progress}%`, background: "#2c1b0d" }} />
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Right Column: Routing optimization & Rush alerts */}
-                  <div>
-                    <h3 className="section-title">Route Optimizer (Floors)</h3>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                      {[
-                        {
-                          floor: "Floor 5 (Block B)",
-                          items: "5x Masala Chai, 2x Almond Cookies",
-                          status: "High Demand",
-                          courier: "Ramesh Kumar",
-                        },
-                        {
-                          floor: "Floor 3 (Main Hall)",
-                          items: "3x Ginger Chai, 4x Saffron Chai",
-                          status: "Medium Demand",
-                          courier: "Suresh Singh",
-                        },
-                        {
-                          floor: "Floor 4 (Executive Cabin)",
-                          items: "2x Kashmiri Kahwa, 1x Cardamom Chai",
-                          status: "Normal",
-                          courier: "Mahesh Pal",
-                        },
-                      ].map((route, i) => (
-                        <div key={i} className="queue-card-detailed-item" style={{ background: "#ffffff", padding: "16px" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                            <h4 style={{ fontSize: "13.5px", margin: 0 }}>🏢 {route.floor}</h4>
-                            <span className="priority-badge-pill normal" style={{ background: route.status === "High Demand" ? "rgba(231,76,60,0.1)" : "rgba(44,27,13,0.05)", color: route.status === "High Demand" ? "#e74c3c" : "#2c1b0d", fontSize: "9px" }}>
-                              {route.status}
-                            </span>
-                          </div>
-                          <p style={{ fontSize: "12px", color: "#666", margin: "0 0 8px" }}>📦 items: <strong>{route.items}</strong></p>
-                          <div style={{ borderTop: "1px dashed rgba(0,0,0,0.05)", paddingTop: "8px", fontSize: "11px", display: "flex", justifyContent: "space-between" }}>
-                            <span>Runner Allocated</span>
-                            <strong>🏃 {route.courier}</strong>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                </div>
-
-              </div>
-            )}
-
             {activeTab === "stock" && (() => {
               const totalValuation = stocks.reduce((acc, curr) => {
                 const numericVal = parseFloat(curr.qty.split(" ")[0]) || 0;
@@ -1310,266 +1276,42 @@ export default function AdminDashboard() {
                     </div>
                   )}
 
-                  {/* Summary Bar */}
-                  <div style={{ background: "#ffffff", padding: "20px", borderRadius: "24px", border: "1px solid rgba(44, 27, 13, 0.06)", marginBottom: "28px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <span style={{ fontSize: "11px", color: "#666", textTransform: "uppercase", display: "block" }}>💰 Total Inventory Valuation</span>
-                      
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                      <span style={{ fontSize: "12px", color: "#666" }}>Auto-Alert to Admin (Low Stock)</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAutoAlertEnabled(!autoAlertEnabled);
-                          setToastMsg(autoAlertEnabled ? "Disabled low stock auto-alerts" : "Enabled low stock auto-alerts");
-                          setTimeout(() => setToastMsg(""), 3000);
-                        }}
-                        style={{
-                          background: autoAlertEnabled ? "#2c1b0d" : "#e0dcd5",
-                          color: autoAlertEnabled ? "#fff" : "#666",
-                          border: "none",
-                          padding: "8px 16px",
-                          borderRadius: "20px",
-                          fontSize: "11.5px",
-                          fontWeight: "bold",
-                          cursor: "pointer"
-                        }}
-                      >
-                        {autoAlertEnabled ? "🟢 ENABLED" : "🔴 DISABLED"}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "28px" }}>
-                    
-                    {/* Left Column: Cards List */}
-                    <div>
-                      <h3 className="section-title">Current Kitchen Ingredients Stock</h3>
-                      <div className="stocks-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
-                        {stocks.map((s, idx) => {
-                          const isEditing = editingStockIdx === idx;
-                          const numericQty = parseFloat(s.qty.split(" ")[0]) || 0;
-                          const itemValue = numericQty * (s.unitPrice || 0);
-
-                          return (
-                            <div key={idx} className="queue-card-detailed-item" style={{ background: "#ffffff", padding: "20px" }}>
-                              
-                              {isEditing ? (
-                                /* EDITING MODE FORM */
-                                <div>
-                                  <h4 style={{ fontSize: "14px", margin: "0 0 12px", color: "#8a583c" }}>Edit: {s.name}</h4>
-                                  
-                                  <div className="form-group" style={{ marginBottom: "10px" }}>
-                                    <label style={{ fontSize: "10px", color: "#666", fontWeight: "bold" }}>Remaining Quantity</label>
-                                    <input
-                                      type="text"
-                                      value={editStockQty}
-                                      onChange={(e) => setEditStockQty(e.target.value)}
-                                      style={{ width: "100%", padding: "6px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px" }}
-                                    />
-                                  </div>
-
-                                  <div className="form-group" style={{ marginBottom: "12px" }}>
-                                    <label style={{ fontSize: "10px", color: "#666", fontWeight: "bold" }}>Status Indicator</label>
-                                    <select
-                                      value={editStockLevel}
-                                      onChange={(e) => setEditStockLevel(e.target.value)}
-                                      style={{ width: "100%", padding: "6px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", background: "#fff", fontSize: "12.5px" }}
-                                    >
-                                      <option value="In Stock">In Stock</option>
-                                      <option value="Low Stock">Low Stock</option>
-                                      <option value="Out of Stock">Out of Stock</option>
-                                    </select>
-                                  </div>
-
-                                  <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingStockIdx(null)}
-                                      style={{ flex: 1, padding: "6px", background: "#fbf9f6", border: "1px solid rgba(0,0,0,0.1)", borderRadius: "6px", fontSize: "11px", cursor: "pointer" }}
-                                    >
-                                      Cancel
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleSaveStockEdit(idx)}
-                                      style={{ flex: 1, padding: "6px", background: "#2c1b0d", color: "#fff", border: "none", borderRadius: "6px", fontSize: "11px", fontWeight: "bold", cursor: "pointer" }}
-                                    >
-                                      Save
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                /* NORMAL VIEW MODE */
-                                <div>
-                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
-                                    <h4 style={{ fontSize: "14px", margin: 0, fontWeight: "bold" }}>{s.name}</h4>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEditingStockIdx(idx);
-                                        setEditStockQty(s.qty);
-                                        setEditStockLevel(s.level);
-                                      }}
-                                      style={{ background: "transparent", border: "none", color: "#8a583c", fontSize: "11.5px", fontWeight: "bold", cursor: "pointer", padding: 0 }}
-                                    >
-                                      ✏️ Edit
-                                    </button>
-                                  </div>
-                                  <p style={{ fontSize: "12px", color: "#666", margin: "0 0 6px" }}>Status Qty: <strong>{s.qty}</strong></p>
-                                  
-                                  {/* Pricing details */}
-                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#888", marginBottom: "12px", padding: "6px 0", borderTop: "1px solid rgba(0,0,0,0.03)", borderBottom: "1px solid rgba(0,0,0,0.03)" }}>
-                                    
-                                    
-                                  </div>
-
-                                  {/* Supplier Detail */}
-                                  <p style={{ fontSize: "10.5px", color: "#666", margin: "0 0 14px", display: "flex", alignItems: "center", gap: "4px" }}>
-                                    <span>🏭 Vendor: {s.supplier || "Market Vendor"}</span>
-                                  </p>
-                                  
-                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                    <span
-                                      className={`stock-indicator-pill ${s.level.toLowerCase().replace(/ /g, "-")}`}
-                                      style={{
-                                        padding: "6px 12px",
-                                        borderRadius: "6px",
-                                        fontSize: "11px",
-                                        fontWeight: "800",
-                                        background: s.level === "In Stock" ? "rgba(39, 174, 96, 0.15)" : s.level === "Low Stock" ? "rgba(241, 196, 15, 0.15)" : "rgba(231, 76, 60, 0.15)",
-                                        color: s.level === "In Stock" ? "#27ae60" : s.level === "Low Stock" ? "#d35400" : "#e74c3c"
-                                      }}
-                                    >
-                                      ● {s.level}
-                                    </span>
-                                    
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedItem(s.name);
-                                        setRequestQty(s.qty.split(" ")[0] !== "0" ? s.qty.split(" ")[0] + " " + (s.qty.split(" ")[1] || "Units") : "20 Kg");
-                                      }}
-                                      className="btn-raise-restock"
-                                      style={{
-                                        background: "transparent",
-                                        border: "1px dashed rgba(44, 27, 13, 0.3)",
-                                        color: "#2c1b0d",
-                                        padding: "6px 12px",
-                                        fontSize: "11px",
-                                        fontWeight: "750",
-                                        borderRadius: "6px",
-                                        cursor: "pointer"
-                                      }}
-                                    >
-                                      ⚡ Request Restock
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Right Column: Add New Stock, Alert Form & History Logs */}
-                    <div>
-                      
-                      {/* Add Stock Item Form */}
-                      <h3 className="section-title">Add Ingredient Item</h3>
-                      <form onSubmit={handleAddNewStock} style={{ background: "#ffffff", padding: "20px", borderRadius: "20px", border: "1px solid rgba(44, 27, 13, 0.04)", marginBottom: "28px" }}>
-                        <div className="form-group" style={{ marginBottom: "12px" }}>
-                          <label style={{ fontSize: "10.5px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Item Name</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. Cinnamon Sticks, Tea Cups"
-                            value={newStockName}
-                            onChange={(e) => setNewStockName(e.target.value)}
-                            required
-                            style={{ width: "100%", padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px" }}
-                          />
-                        </div>
-
-                        <div className="form-group" style={{ marginBottom: "12px" }}>
-                          <label style={{ fontSize: "10.5px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Initial Quantity</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. 5 Kg, 1000 Units"
-                            value={newStockQty}
-                            onChange={(e) => setNewStockQty(e.target.value)}
-                            required
-                            style={{ width: "100%", padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px" }}
-                          />
-                        </div>
-
-                        <div className="form-group" style={{ marginBottom: "16px" }}>
-                          <label style={{ fontSize: "10.5px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Status</label>
-                          <select
-                            value={newStockLevel}
-                            onChange={(e) => setNewStockLevel(e.target.value)}
-                            style={{ width: "100%", padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(44,27,13,0.15)", background: "#fff", fontSize: "12.5px" }}
-                          >
-                            <option value="In Stock">In Stock</option>
-                            <option value="Low Stock">Low Stock</option>
-                            <option value="Out of Stock">Out of Stock</option>
-                          </select>
-                        </div>
-
-                        <button type="submit" style={{ width: "100%", background: "#8a583c", color: "#ffffff", border: "none", padding: "10px", borderRadius: "8px", fontWeight: "800", fontSize: "12px", cursor: "pointer" }}>
-                          + ADD NEW INGREDIENT
-                        </button>
-                      </form>
-
-                      {/* Restock History Log */}
-                      <h3 className="section-title">⏱️ Recent Incoming Shipments</h3>
-                      <div style={{ background: "#ffffff", padding: "20px", borderRadius: "20px", border: "1px solid rgba(44, 27, 13, 0.04)", marginBottom: "28px" }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                          {restockHistory.map((hist, i) => (
-                            <div key={i} style={{ fontSize: "12px", borderBottom: "1px solid #f2eee9", paddingBottom: "8px" }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
-                                <strong>{hist.item} ({hist.qty})</strong>
-                                <span style={{ color: "#888" }}>{hist.date}</span>
-                              </div>
-                              <span style={{ color: "#666", fontSize: "11px" }}>Source: {hist.source}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                  <div style={{ maxWidth: "600px", margin: "0 auto", width: "100%" }}>
 
                       {/* Raise Restock Alert Form */}
                       <h3 className="section-title">Raise Restock Request</h3>
-                      <form onSubmit={handleRaiseAlert} style={{ background: "#ffffff", padding: "24px", borderRadius: "20px", border: "1px solid rgba(44, 27, 13, 0.04)", marginBottom: "28px" }}>
-                        <div className="form-group" style={{ marginBottom: "16px" }}>
-                          <label style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Select Ingredient</label>
-                          <select
+                      <form onSubmit={handleRaiseAlert} style={{ background: "#ffffff", padding: "30px", borderRadius: "24px", border: "1px solid rgba(44, 27, 13, 0.08)", boxShadow: "0 4px 20px rgba(0,0,0,0.03)", marginBottom: "32px" }}>
+                        <div className="form-group" style={{ marginBottom: "20px" }}>
+                          <label style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", color: "#8a583c", marginBottom: "8px", display: "block" }}>Ingredient Name</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Assam Loose Tea Leaves"
                             value={selectedItem}
                             onChange={(e) => setSelectedItem(e.target.value)}
-                            style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid rgba(44,27,13,0.15)", background: "#fff", fontSize: "13px" }}
-                          >
-                            {stocks.map((s, i) => (
-                              <option key={i} value={s.name}>{s.name}</option>
-                            ))}
-                          </select>
+                            required
+                            style={{ width: "100%", padding: "12px 16px", borderRadius: "12px", border: "1px solid rgba(138,88,60,0.2)", fontSize: "14px", background: "#fdfbf9", color: "#2c1b0d", outline: "none", transition: "all 0.2s ease" }}
+                            onFocus={(e) => e.target.style.borderColor = "#8a583c"}
+                            onBlur={(e) => e.target.style.borderColor = "rgba(138,88,60,0.2)"}
+                          />
                         </div>
 
-                        <div className="form-group" style={{ marginBottom: "16px" }}>
-                          <label style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Requested Quantity</label>
+                        <div className="form-group" style={{ marginBottom: "20px" }}>
+                          <label style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", color: "#8a583c", marginBottom: "8px", display: "block" }}>Requested Quantity</label>
                           <input
                             type="text"
                             placeholder="e.g. 20 Kg, 50 Litres"
                             value={requestQty}
                             onChange={(e) => setRequestQty(e.target.value)}
                             required
-                            style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "13px" }}
+                            style={{ width: "100%", padding: "12px 16px", borderRadius: "12px", border: "1px solid rgba(138,88,60,0.2)", fontSize: "14px", background: "#fdfbf9", color: "#2c1b0d", outline: "none", transition: "all 0.2s ease" }}
+                            onFocus={(e) => e.target.style.borderColor = "#8a583c"}
+                            onBlur={(e) => e.target.style.borderColor = "rgba(138,88,60,0.2)"}
                           />
                         </div>
 
-                        <div className="form-group" style={{ marginBottom: "16px" }}>
-                          <label style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Urgency Level</label>
-                          <div style={{ display: "flex", gap: "8px" }}>
+                        <div className="form-group" style={{ marginBottom: "24px" }}>
+                          <label style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", color: "#8a583c", marginBottom: "10px", display: "block" }}>Urgency Level</label>
+                          <div style={{ display: "flex", gap: "12px" }}>
                             {["Low", "Medium", "High"].map((level) => (
                               <button
                                 key={level}
@@ -1577,15 +1319,17 @@ export default function AdminDashboard() {
                                 onClick={() => setUrgency(level)}
                                 style={{
                                   flex: 1,
-                                  padding: "8px",
-                                  border: "1.5px solid",
-                                  borderColor: urgency === level ? "#2c1b0d" : "rgba(44,27,13,0.1)",
-                                  background: urgency === level ? "#2c1b0d" : "transparent",
-                                  color: urgency === level ? "#ffffff" : "#2c1b0d",
-                                  borderRadius: "6px",
-                                  fontSize: "11.5px",
-                                  fontWeight: "bold",
-                                  cursor: "pointer"
+                                  padding: "10px",
+                                  border: "2px solid",
+                                  borderColor: urgency === level ? "#2c1b0d" : "rgba(44,27,13,0.08)",
+                                  background: urgency === level ? "#2c1b0d" : "#ffffff",
+                                  color: urgency === level ? "#ffffff" : "#555",
+                                  borderRadius: "10px",
+                                  fontSize: "12px",
+                                  fontWeight: "800",
+                                  cursor: "pointer",
+                                  transition: "all 0.2s ease",
+                                  boxShadow: urgency === level ? "0 4px 12px rgba(44,27,13,0.15)" : "none"
                                 }}
                               >
                                 {level === "High" ? "🚨 High" : level}
@@ -1594,18 +1338,23 @@ export default function AdminDashboard() {
                           </div>
                         </div>
 
-                        <div className="form-group" style={{ marginBottom: "20px" }}>
-                          <label style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Urgent Notes (optional)</label>
+                        <div className="form-group" style={{ marginBottom: "24px" }}>
+                          <label style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", color: "#8a583c", marginBottom: "8px", display: "block" }}>Urgent Notes (optional)</label>
                           <textarea
                             placeholder="Why is this restock urgent?"
                             value={requestNotes}
                             onChange={(e) => setRequestNotes(e.target.value)}
                             rows="2"
-                            style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "13px", resize: "none" }}
+                            style={{ width: "100%", padding: "12px 16px", borderRadius: "12px", border: "1px solid rgba(138,88,60,0.2)", fontSize: "14px", background: "#fdfbf9", color: "#2c1b0d", outline: "none", resize: "none", transition: "all 0.2s ease" }}
+                            onFocus={(e) => e.target.style.borderColor = "#8a583c"}
+                            onBlur={(e) => e.target.style.borderColor = "rgba(138,88,60,0.2)"}
                           />
                         </div>
 
-                        <button type="submit" style={{ width: "100%", background: "#2c1b0d", color: "#ffffff", border: "none", padding: "12px", borderRadius: "8px", fontWeight: "800", fontSize: "12px", cursor: "pointer", letterSpacing: "0.5px" }}>
+                        <button type="submit" style={{ width: "100%", background: "#2c1b0d", color: "#ffffff", border: "none", padding: "14px", borderRadius: "12px", fontWeight: "800", fontSize: "13px", cursor: "pointer", letterSpacing: "1px", textTransform: "uppercase", boxShadow: "0 6px 16px rgba(44,27,13,0.2)", transition: "transform 0.1s ease" }}
+                        onMouseDown={(e) => e.target.style.transform = "scale(0.98)"}
+                        onMouseUp={(e) => e.target.style.transform = "scale(1)"}
+                        onMouseLeave={(e) => e.target.style.transform = "scale(1)"}>
                           SEND ALERT TO ADMIN
                         </button>
                       </form>
@@ -1628,11 +1377,15 @@ export default function AdminDashboard() {
                               <span style={{ color: "#27ae60" }}>● {r.status}</span>
                               <span style={{ color: "#999" }}>{r.date}</span>
                             </div>
+                            
+                            {r.adminMessage && (
+                              <div style={{ marginTop: "6px", padding: "6px", background: "#f8f9fa", borderRadius: "4px", fontSize: "10px", color: "#444", borderLeft: "2px solid #3498db" }}>
+                                <strong>Admin Reply:</strong> {r.adminMessage}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
-
-                    </div>
 
                   </div>
                 </div>
@@ -1764,6 +1517,11 @@ export default function AdminDashboard() {
             })()}
 
             {activeTab === "history" && (() => {
+              const completedCount = orders.filter(o => o.status === "Delivered" || o.status === "Completed").length;
+              const cancelledCount = orders.filter(o => o.status === "Cancelled" || o.status === "Refunded").length;
+              const totalProcessed = orders.filter(o => o.status !== "Received" && o.status !== "Pending" && o.status !== "Preparing").length;
+              const successRate = totalProcessed > 0 ? ((completedCount / totalProcessed) * 100).toFixed(1) : "100.0";
+
               const filteredHistory = historyOrders.filter((h) => {
                 if (historyDateFilter === "today") {
                   return h.date.includes("09/12/2026");
@@ -1820,9 +1578,9 @@ export default function AdminDashboard() {
                             <button
                               type="button"
                               onClick={() => setActiveInvoice(null)}
-                              style={{ padding: "8px 16px", background: "rgba(255,255,255,0.9)", border: "1px solid rgba(44,27,13,0.15)", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", fontSize: "12px", color: "#2c1b0d" }}
+                              style={{ padding: "8px 16px", background: "#fdf5e9", border: "1px solid rgba(44,27,13,0.2)", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", fontSize: "13px", color: "#2c1b0d", display: "flex", alignItems: "center", gap: "6px" }}
                             >
-                              ✕ Close Invoice View
+                              <span>←</span> Back to Order History
                             </button>
                             <button
                               type="button"
@@ -1952,15 +1710,15 @@ export default function AdminDashboard() {
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px", marginBottom: "28px" }}>
                     <div style={{ background: "#ffffff", padding: "18px", borderRadius: "16px", border: "1px solid rgba(44, 27, 13, 0.04)" }}>
                       <span style={{ fontSize: "11px", color: "#666", display: "block" }}>☕ Total Served Brews</span>
-                      <strong style={{ fontSize: "20px", color: "#2c1b0d" }}>446 Completed</strong>
+                      <strong style={{ fontSize: "20px", color: "#2c1b0d" }}>{completedCount} Completed</strong>
                     </div>
                     <div style={{ background: "#ffffff", padding: "18px", borderRadius: "16px", border: "1px solid rgba(44, 27, 13, 0.04)" }}>
                       <span style={{ fontSize: "11px", color: "#666", display: "block" }}>📈 Settlement Success Rate</span>
-                      <strong style={{ fontSize: "20px", color: "#27ae60" }}>99.1% Successful</strong>
+                      <strong style={{ fontSize: "20px", color: "#27ae60" }}>{successRate}% Successful</strong>
                     </div>
                     <div style={{ background: "#ffffff", padding: "18px", borderRadius: "16px", border: "1px solid rgba(44, 27, 13, 0.04)" }}>
                       <span style={{ fontSize: "11px", color: "#666", display: "block" }}>🛑 Cancelled / Refunded</span>
-                      <strong style={{ fontSize: "20px", color: "#e74c3c" }}>4 Invoices</strong>
+                      <strong style={{ fontSize: "20px", color: "#e74c3c" }}>{cancelledCount} Invoices</strong>
                     </div>
                   </div>
 
@@ -2149,570 +1907,8 @@ export default function AdminDashboard() {
               );
             })()}
 
-            {activeTab === "menu" && (
-              <div className="tab-body-wrapper">
-                {toastMsg && (
-                  <div style={{ position: "fixed", top: "24px", right: "24px", background: "#2c1b0d", color: "#fdf5e9", padding: "16px 24px", borderRadius: "12px", boxShadow: "0 10px 30px rgba(0,0,0,0.15)", zIndex: 9999, fontWeight: "bold", borderLeft: "4px solid #e74c3c", display: "flex", gap: "10px", alignItems: "center" }}>
-                    <span>🚨</span> {toastMsg}
-                  </div>
-                )}
-
-                {/* Advanced Menu Sub-Tabs */}
-                <div style={{ display: "flex", gap: "12px", borderBottom: "2px solid rgba(44,27,13,0.06)", paddingBottom: "12px", marginBottom: "28px" }}>
-                  {[
-                    { id: "live", label: "📱 Today's Live Menu" },
-                    { id: "catalog", label: "📋 Base Catalog Setup" },
-                    { id: "schedule", label: "📅 Schedule & Slots" },
-                    { id: "combos", label: "🌾 Combos & Seasonal" },
-                    { id: "addons", label: "➕ Add-ons Catalog" }
-                  ].map((sub) => (
-                    <button
-                      key={sub.id}
-                      type="button"
-                      onClick={() => setMenuSubTab(sub.id)}
-                      style={{
-                        padding: "8px 16px",
-                        border: "none",
-                        background: menuSubTab === sub.id ? "#2c1b0d" : "transparent",
-                        color: menuSubTab === sub.id ? "#ffffff" : "#2c1b0d",
-                        borderRadius: "8px",
-                        fontWeight: "bold",
-                        fontSize: "12.5px",
-                        cursor: "pointer",
-                        transition: "all 0.2s"
-                      }}
-                    >
-                      {sub.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* SUBTAB 1: TODAY'S LIVE MENU */}
-                {menuSubTab === "live" && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "28px" }}>
-                    <div>
-                      <h3 className="section-title">Today's Quick Toggles & Overrides</h3>
-                      <p style={{ fontSize: "12px", color: "#666", marginTop: "-12px", marginBottom: "20px" }}>Changes made here instantly update the user homepage without editing catalog details.</p>
-                      
-                      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                        {menuItems.map((m, i) => {
-                          // Check if any linked ingredient has low stock
-                          const isLowStock = stocks.some(st => m.linkedIngredients?.includes(st.name) && st.level !== "In Stock");
-                          return (
-                            <div key={i} className="queue-card-detailed-item" style={{ background: "#ffffff", padding: "20px", display: "flex", gap: "16px", alignItems: "center" }}>
-                              <img src={m.image} alt={m.name} style={{ width: "68px", height: "68px", borderRadius: "12px", objectFit: "cover" }} />
-                              
-                              <div style={{ flex: 1 }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                                  <h4 style={{ fontSize: "14.5px", margin: 0, fontWeight: "bold" }}>
-                                    {m.name} {m.isSpecial && <span style={{ fontSize: "10px", background: "rgba(241,196,15,0.2)", color: "#d35400", padding: "2px 6px", borderRadius: "4px", marginLeft: "6px" }}>★ Special</span>}
-                                  </h4>
-                                  
-                                </div>
-                                <p style={{ fontSize: "11.5px", color: "#777", margin: "0 0 10px" }}>{m.desc}</p>
-                                
-                                {isLowStock && (
-                                  <div style={{ fontSize: "11px", color: "#e74c3c", fontWeight: "bold", background: "rgba(231,76,60,0.08)", padding: "4px 8px", borderRadius: "4px", marginBottom: "10px", display: "inline-block" }}>
-                                    ⚠️ linked stock is low! "Hurry, only few left" warning banner active.
-                                  </div>
-                                )}
-
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleMenuAvailability(i)}
-                                    style={{ border: "none", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: "bold", cursor: "pointer", background: m.active ? "rgba(39, 174, 96, 0.12)" : "rgba(0,0,0,0.05)", color: m.active ? "#27ae60" : "#777" }}
-                                  >
-                                    {m.active ? "🟢 Live on App" : "🔴 Hidden from Users"}
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setMenuItems(prev => prev.map((item, idx) => idx === i ? { ...item, isSpecial: !item.isSpecial } : item));
-                                      setToastMsg(m.isSpecial ? `Removed today's special tag` : `Tagged ${m.name} as today's special!`);
-                                      setTimeout(() => setToastMsg(""), 3000);
-                                    }}
-                                    style={{ background: "transparent", border: "1px solid rgba(0,0,0,0.1)", padding: "4px 8px", borderRadius: "6px", fontSize: "11px", cursor: "pointer" }}
-                                  >
-                                    {m.isSpecial ? "★ Unmark Special" : "★ Mark Special"}
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Preview Widget */}
-                    <div>
-                      <h3 className="section-title">📱 User Screen Live Preview</h3>
-                      <div style={{ background: "#ffffff", padding: "24px", borderRadius: "24px", border: "1.5px solid #2c1b0d", minHeight: "350px", position: "relative" }}>
-                        <div style={{ background: "#2c1b0d", color: "#fff", padding: "10px", textAlign: "center", borderRadius: "10px 10px 0 0", margin: "-24px -24px 20px" }}>
-                          <span style={{ fontSize: "11px", fontWeight: "bold" }}>Preview: CHAI HEROES APP</span>
-                        </div>
-                        
-                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                          {menuItems.filter(m => m.active).map((m, i) => (
-                            <div key={i} style={{ display: "flex", gap: "10px", borderBottom: "1px solid #f2eee9", paddingBottom: "10px" }}>
-                              <img src={m.image} alt={m.name} style={{ width: "45px", height: "45px", borderRadius: "8px", objectFit: "cover" }} />
-                              <div style={{ flex: 1 }}>
-                                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                  <strong style={{ fontSize: "12px" }}>{m.name}</strong>
-                                  
-                                </div>
-                                <span style={{ fontSize: "10px", color: "#777", display: "block" }}>{m.desc.slice(0, 45)}...</span>
-                                {m.isSpecial && <span style={{ fontSize: "8px", background: "#f1c40f", color: "#2c1b0d", padding: "1px 4px", borderRadius: "3px", fontWeight: "bold", display: "inline-block", marginTop: "2px" }}>Today's Special</span>}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* SUBTAB 2: BASE CATALOG SETUP */}
-                {menuSubTab === "catalog" && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "28px" }}>
-                    <div>
-                      <h3 className="section-title">Base Catalog Configuration</h3>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                        {menuItems.map((m, i) => (
-                          <div key={i} className="queue-card-detailed-item" style={{ background: "#ffffff", padding: "20px" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                              <strong style={{ fontSize: "15px" }}>{m.name}</strong>
-                              <span style={{ fontSize: "10px", background: "rgba(39, 174, 96, 0.1)", color: "#27ae60", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold" }}>
-                                {m.approvalStatus}
-                              </span>
-                            </div>
-                            <p style={{ fontSize: "11.5px", color: "#666", margin: "0 0 10px" }}>{m.desc}</p>
-                            
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", fontSize: "11px", color: "#555", borderTop: "1px solid #f2eee9", paddingTop: "10px", marginBottom: "12px" }}>
-                              <span>📂 Cat: <strong>{m.category}</strong></span>
-                              <span>⏱️ Prep: <strong>{m.prepTime}</strong></span>
-                              <span>🥤 Unit: <strong>{m.unit}</strong></span>
-                              <span>🟢 Type: <strong>{m.veg ? "Veg" : "Non-Veg"}</strong></span>
-                              <span>📦 Limits: <strong>Min {m.minQty} - Max {m.maxQty}</strong></span>
-                              <span>🔗 stock ingredients: <strong>{m.linkedIngredients?.join(", ") || "None"}</strong></span>
-                            </div>
-
-                            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const name = prompt("Change name of catalog item:", m.name);
-                                  const price = prompt("Change price of catalog item:", m.price);
-                                  if (name && price) {
-                                    setMenuItems(prev => prev.map((item, idx) => idx === i ? { ...item, name, price: parseFloat(price) || item.price } : item));
-                                    setToastMsg(`Updated "${name}" catalog details!`);
-                                    setTimeout(() => setToastMsg(""), 3000);
-                                  }
-                                }}
-                                style={{ background: "transparent", border: "1px solid rgba(0,0,0,0.1)", padding: "4px 8px", borderRadius: "6px", fontSize: "11px", cursor: "pointer" }}
-                              >
-                                Edit Catalog details
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Add Item form */}
-                    <div>
-                      <h3 className="section-title">Create & Register Item</h3>
-                      <form onSubmit={handleAddNewMenuItem} style={{ background: "#ffffff", padding: "24px", borderRadius: "20px", border: "1px solid rgba(44, 27, 13, 0.04)" }}>
-                        
-                        <div className="form-group" style={{ marginBottom: "12px" }}>
-                          <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Item Name</label>
-                          <input type="text" value={newMenuItemName} onChange={(e) => setNewMenuItemName(e.target.value)} required style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px" }} />
-                        </div>
-
-                        <div className="form-group" style={{ marginBottom: "12px" }}>
-                          <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Price (INR)</label>
-                          <input type="number" value={newMenuItemPrice} onChange={(e) => setNewMenuItemPrice(e.target.value)} required style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px" }} />
-                        </div>
-
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
-                          <div className="form-group">
-                            <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Category</label>
-                            <select value={newMenuCategory} onChange={(e) => setNewMenuCategory(e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", background: "#fff", fontSize: "12.5px" }}>
-                              <option value="Chai">Chai</option>
-                              <option value="Coffee">Coffee</option>
-                              <option value="Namkeen">Namkeen</option>
-                              <option value="Biscuits">Biscuits</option>
-                            </select>
-                          </div>
-                          <div className="form-group">
-                            <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Serving Unit</label>
-                            <select value={newMenuUnit} onChange={(e) => setNewMenuUnit(e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", background: "#fff", fontSize: "12.5px" }}>
-                              <option value="Cup">Cup</option>
-                              <option value="Kulhad">Kulhad</option>
-                              <option value="Pack">Pack</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
-                          <div className="form-group">
-                            <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Prep Time (batch)</label>
-                            <input type="text" value={newMenuPrepTime} onChange={(e) => setNewMenuPrepTime(e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px" }} />
-                          </div>
-                          <div className="form-group">
-                            <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Veg / Non-Veg</label>
-                            <select value={newMenuVeg ? "veg" : "nonveg"} onChange={(e) => setNewMenuVeg(e.target.value === "veg")} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", background: "#fff", fontSize: "12.5px" }}>
-                              <option value="veg">🟢 Veg</option>
-                              <option value="nonveg">🔴 Non-Veg</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
-                          <div className="form-group">
-                            <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Min Order Qty</label>
-                            <input type="number" value={newMenuMinQty} onChange={(e) => setNewMenuMinQty(e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px" }} />
-                          </div>
-                          <div className="form-group">
-                            <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Max Order Qty</label>
-                            <input type="number" value={newMenuMaxQty} onChange={(e) => setNewMenuMaxQty(e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px" }} />
-                          </div>
-                        </div>
-
-                        <div className="form-group" style={{ marginBottom: "12px" }}>
-                          <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Image URL</label>
-                          <input type="text" value={newMenuItemImg} onChange={(e) => setNewMenuItemImg(e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px" }} />
-                        </div>
-
-                        <div className="form-group" style={{ marginBottom: "16px" }}>
-                          <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Description</label>
-                          <textarea rows="2" value={newMenuItemDesc} onChange={(e) => setNewMenuItemDesc(e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px", resize: "none" }} />
-                        </div>
-
-                        <button type="submit" style={{ width: "100%", background: "#2c1b0d", color: "#ffffff", border: "none", padding: "10px", borderRadius: "8px", fontWeight: "800", fontSize: "12px", cursor: "pointer" }}>
-                          SEND REGISTER ITEM REQUEST
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-                )}
-
-                {/* SUBTAB 3: SCHEDULES & SLOTS */}
-                {menuSubTab === "schedule" && (
-                  <div style={{ background: "#ffffff", padding: "24px", borderRadius: "20px", border: "1px solid rgba(44, 27, 13, 0.04)" }}>
-                    <h3 className="section-title" style={{ marginTop: 0 }}>Recurring Weekly Availability & Time Slots</h3>
-                    
-                    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                      {menuItems.map((m, idx) => (
-                        <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #f2eee9", paddingBottom: "12px" }}>
-                          <div>
-                            <strong>{m.name}</strong>
-                            <span style={{ display: "block", fontSize: "11px", color: "#888" }}>Current Time-slot: <strong>{m.timeSlot || "All Day"}</strong></span>
-                          </div>
-                          
-                          {/* Day selection badges */}
-                          <div style={{ display: "flex", gap: "6px" }}>
-                            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => {
-                              const active = m.scheduleDays?.includes(day);
-                              return (
-                                <button
-                                  key={day}
-                                  type="button"
-                                  onClick={() => {
-                                    const nextDays = active
-                                      ? m.scheduleDays.filter(d => d !== day)
-                                      : [...(m.scheduleDays || []), day];
-                                    setMenuItems(prev => prev.map((item, i) => i === idx ? { ...item, scheduleDays: nextDays } : item));
-                                  }}
-                                  style={{
-                                    padding: "4px 8px",
-                                    fontSize: "10.5px",
-                                    border: "none",
-                                    borderRadius: "4px",
-                                    background: active ? "rgba(44,27,13,0.12)" : "rgba(0,0,0,0.04)",
-                                    color: active ? "#2c1b0d" : "#777",
-                                    fontWeight: "bold",
-                                    cursor: "pointer"
-                                  }}
-                                >
-                                  {day}
-                                </button>
-                              );
-                            })}
-                          </div>
-
-                          {/* Time slot change selector */}
-                          <select
-                            value={m.timeSlot || "All Day"}
-                            onChange={(e) => {
-                              const slot = e.target.value;
-                              setMenuItems(prev => prev.map((item, i) => i === idx ? { ...item, timeSlot: slot } : item));
-                            }}
-                            style={{ padding: "6px", borderRadius: "6px", border: "1px solid #ddd", fontSize: "11.5px" }}
-                          >
-                            <option value="All Day">☀️ All Day</option>
-                            <option value="Morning Only">🌅 Morning Only</option>
-                            <option value="Evening Only">🌇 Evening Only</option>
-                          </select>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* SUBTAB 4: COMBOS & SEASONAL SETUP */}
-                {menuSubTab === "combos" && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "28px" }}>
-                    <div>
-                      <h3 className="section-title">Active Combos & Pairings</h3>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "28px" }}>
-                        {combos.map((c, i) => (
-                          <div key={i} className="queue-card-detailed-item" style={{ background: "#ffffff", padding: "18px" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                              <strong style={{ fontSize: "14px", color: "#2c1b0d" }}>{c.name}</strong>
-                              
-                            </div>
-                            <span style={{ fontSize: "11.5px", color: "#666", display: "block", marginBottom: "10px" }}>📦 Combo items: {c.items}</span>
-                            <p style={{ fontSize: "11px", color: "#888", margin: "0 0 10px", fontStyle: "italic" }}>{c.desc}</p>
-                            
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCombos(prev => prev.map((cb, idx) => idx === i ? { ...cb, active: !cb.active } : cb));
-                              }}
-                              style={{ border: "none", padding: "4px 8px", borderRadius: "4px", fontSize: "10.5px", fontWeight: "bold", cursor: "pointer", background: c.active ? "rgba(39, 174, 96, 0.1)" : "#f0f0f0", color: c.active ? "#27ae60" : "#777" }}
-                            >
-                              {c.active ? "Active" : "Paused"}
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Auto-suggest rules */}
-                      <h3 className="section-title">💡 Auto-Suggest Pairings Rules</h3>
-                      <div style={{ background: "#ffffff", padding: "20px", borderRadius: "20px", border: "1px solid rgba(44, 27, 13, 0.04)" }}>
-                        <div style={{ fontSize: "12px", borderBottom: "1px solid #f2eee9", paddingBottom: "8px", marginBottom: "8px" }}>
-                          <span>When user selects <strong>Classic Masala Chai</strong> ➔ Auto suggest: <strong>Almond Cookies</strong></span>
-                        </div>
-                        <div style={{ fontSize: "12px", borderBottom: "1px solid #f2eee9", paddingBottom: "8px", marginBottom: "8px" }}>
-                          <span>When user selects <strong>Saffron Royal Chai</strong> ➔ Auto suggest: <strong>Saffron Biscuits</strong></span>
-                        </div>
-                        <div style={{ fontSize: "12px" }}>
-                          <span>When user selects <strong>Kashmiri Kahwa</strong> ➔ Auto suggest: <strong>Almond Slivers Add-on</strong></span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* New Combo builder Form */}
-                    <div>
-                      <h3 className="section-title">Create Custom Combo</h3>
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          const name = e.target.comboName.value;
-                          const price = e.target.comboPrice.value;
-                          const baseItems = e.target.comboItems.value;
-                          if (!name || !price || !baseItems) return;
-                          
-                          // Append selected addons
-                          let finalItems = baseItems;
-                          if (selectedComboAddons.length > 0) {
-                            finalItems += " + " + selectedComboAddons.join(" + ");
-                          }
-
-                          setCombos(prev => [...prev, { name, price: parseFloat(price), items: finalItems, active: true, desc: "Special package rate." }]);
-                          e.target.reset();
-                          setSelectedComboAddons([]);
-                          setToastMsg("🌱 Successfully published new combo!");
-                          setTimeout(() => setToastMsg(""), 3500);
-                        }}
-                        style={{ background: "#ffffff", padding: "24px", borderRadius: "20px", border: "1px solid rgba(44, 27, 13, 0.04)", marginBottom: "28px" }}
-                      >
-                        <div className="form-group" style={{ marginBottom: "12px" }}>
-                          <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Combo Name</label>
-                          <input name="comboName" type="text" placeholder="e.g. Snack Combo" required style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px" }} />
-                        </div>
-                        <div className="form-group" style={{ marginBottom: "12px" }}>
-                          <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Combo Price (INR)</label>
-                          <input name="comboPrice" type="number" placeholder="e.g. 199" required style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px" }} />
-                        </div>
-                        <div className="form-group" style={{ marginBottom: "16px" }}>
-                          <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Included Base Items</label>
-                          <input name="comboItems" type="text" placeholder="e.g. Ginger Chai + Biscuits" required style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px" }} />
-                        </div>
-                        
-                        {/* Add-ons Selector */}
-                        <div className="form-group" style={{ marginBottom: "16px" }}>
-                          <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555", display: "block", marginBottom: "6px" }}>Select Bundle Add-ons</label>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                            {addonsList.map((ad, idx) => {
-                              const checked = selectedComboAddons.includes(ad.name);
-                              return (
-                                <label key={idx} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", cursor: "pointer" }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={() => {
-                                      if (checked) {
-                                        setSelectedComboAddons(prev => prev.filter(n => n !== ad.name));
-                                      } else {
-                                        setSelectedComboAddons(prev => [...prev, ad.name]);
-                                      }
-                                    }}
-                                  />
-                                  <span>{ad.name} </span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <button type="submit" style={{ width: "100%", background: "#2c1b0d", color: "#ffffff", border: "none", padding: "10px", borderRadius: "8px", fontWeight: "800", fontSize: "12px", cursor: "pointer" }}>
-                          CREATE & REGISTER COMBO
-                        </button>
-                      </form>
-
-                      {/* Seasonal / Festive settings */}
-                      <h3 className="section-title">🍂 Seasonal Menu Settings</h3>
-                      <div style={{ background: "#ffffff", padding: "20px", borderRadius: "20px", border: "1px solid rgba(44, 27, 13, 0.04)" }}>
-                        <span style={{ fontSize: "11px", color: "#8a583c", fontWeight: "bold", display: "block", marginBottom: "10px" }}>WINTER LIMITED EDITION</span>
-                        <div style={{ fontSize: "11.5px", color: "#555" }}>
-                          <p>Item: <strong>Kesar Chai Special</strong></p>
-                          <p>Active period: <strong>Nov 15 - Feb 15</strong></p>
-                          <span style={{ fontSize: "10px", color: "#27ae60", background: "rgba(39,174,96,0.1)", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold" }}>● Auto-Schedule Active</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* SUBTAB 5: ADD-ONS CATALOG */}
-                {menuSubTab === "addons" && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "28px" }}>
-                    <div>
-                      <h3 className="section-title">Add-ons Catalog Setup</h3>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                        {addonsList.map((ad, i) => (
-                          <div key={i} className="queue-card-detailed-item" style={{ background: "#ffffff", padding: "18px", display: "flex", gap: "16px", alignItems: "center" }}>
-                            <img src={ad.image || "/chai-ingredients.png"} alt={ad.name} style={{ width: "50px", height: "50px", borderRadius: "8px", objectFit: "cover" }} />
-                            <div style={{ flex: 1 }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <strong style={{ fontSize: "13.5px" }}>{ad.name}</strong>
-                                
-                              </div>
-                              <p style={{ fontSize: "11px", color: "#777", margin: "4px 0 8px" }}>{ad.desc}</p>
-                              
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setAddonsList(prev => prev.map((item, idx) => idx === i ? { ...item, active: !item.active } : item));
-                                }}
-                                style={{ border: "none", padding: "4px 8px", borderRadius: "4px", fontSize: "10px", fontWeight: "bold", cursor: "pointer", background: ad.active ? "rgba(39, 174, 96, 0.1)" : "#f0f0f0", color: ad.active ? "#27ae60" : "#777" }}
-                              >
-                                {ad.active ? "🟢 Available" : "🔴 Paused"}
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Add new addon Form */}
-                    <div>
-                      <h3 className="section-title">Create Custom Add-on</h3>
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          if (!newAddonName || !newAddonPrice) return;
-                          const newAdd = {
-                            name: newAddonName,
-                            price: parseFloat(newAddonPrice) || 0,
-                            desc: newAddonDesc || "Fresh add-on suggestion.",
-                            image: newAddonImg || "https://i.pinimg.com/736x/82/64/80/8264808f4840845e96abc7f7ec60b82f.jpg",
-                            active: true
-                          };
-                          setAddonsList(prev => [...prev, newAdd]);
-                          setNewAddonName("");
-                          setNewAddonPrice("");
-                          setNewAddonDesc("");
-                          setNewAddonImg("");
-                          setToastMsg(`🌱 Added add-on "${newAddonName}" successfully!`);
-                          setTimeout(() => setToastMsg(""), 3000);
-                        }}
-                        style={{ background: "#ffffff", padding: "24px", borderRadius: "20px", border: "1px solid rgba(44, 27, 13, 0.04)" }}
-                      >
-                        <div className="form-group" style={{ marginBottom: "12px" }}>
-                          <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Add-on Name</label>
-                          <input type="text" value={newAddonName} onChange={(e) => setNewAddonName(e.target.value)} required style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px" }} />
-                        </div>
-                        <div className="form-group" style={{ marginBottom: "12px" }}>
-                          <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Add-on Price (INR)</label>
-                          <input type="number" value={newAddonPrice} onChange={(e) => setNewAddonPrice(e.target.value)} required style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px" }} />
-                        </div>
-                        <div className="form-group" style={{ marginBottom: "12px" }}>
-                          <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Image Link URL</label>
-                          <input type="text" value={newAddonImg} onChange={(e) => setNewAddonImg(e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px" }} />
-                        </div>
-                        <div className="form-group" style={{ marginBottom: "16px" }}>
-                          <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Short Description</label>
-                          <textarea rows="2" value={newAddonDesc} onChange={(e) => setNewAddonDesc(e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "12.5px", resize: "none" }} />
-                        </div>
-                        <button type="submit" style={{ width: "100%", background: "#2c1b0d", color: "#ffffff", border: "none", padding: "10px", borderRadius: "8px", fontWeight: "800", fontSize: "12px", cursor: "pointer" }}>
-                          PUBLISH ADD-ON
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-                )}
-
-              </div>
-            )}
-
             {activeTab === "subs" && (() => {
-              // Mock active subscriptions with details
-              const activeSubs = [
-                {
-                  id: "SUB-801",
-                  customer: "Rohan Varma",
-                  office: "Innovate Labs, Room 402, Floor 4",
-                  items: "2x Classic Masala Chai, 1x Cookie",
-                  schedule: "Mon-Sat (Daily)",
-                  timeSlot: "09:00 AM",
-                  startDate: "01/06/2026",
-                  status: "Active"
-                },
-                {
-                  id: "SUB-802",
-                  customer: "Meera Joshi",
-                  office: "Pulse Ventures, Room 512, Floor 5",
-                  items: "1x Ginger Chai",
-                  schedule: "Mon-Wed-Fri",
-                  timeSlot: "11:30 AM",
-                  startDate: "15/06/2026",
-                  status: "Active"
-                },
-                {
-                  id: "SUB-803",
-                  customer: "Abhishek Sen",
-                  office: "NextGen Software, Room 301, Floor 3",
-                  items: "3x Saffron Royal Chai, 3x Almond Biscuits",
-                  schedule: "Mon-Sat (Daily)",
-                  timeSlot: "04:30 PM",
-                  startDate: "20/06/2026",
-                  status: "Active"
-                },
-                {
-                  id: "SUB-804",
-                  customer: "Sneha Reddy",
-                  office: "Alpha Capital, Room 508, Floor 5",
-                  items: "2x Kashmiri Kahwa",
-                  schedule: "Daily",
-                  timeSlot: "10:00 AM",
-                  startDate: "28/06/2026",
-                  status: "Paused"
-                }
-              ];
+              const activeSubs = subscriptions;
 
               return (
                 <div className="tab-body-wrapper">
@@ -2740,26 +1936,20 @@ export default function AdminDashboard() {
 
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                               <span style={{ fontSize: "11.5px", color: "#666" }}>
-                                ⏰ {sub.timeSlot} ({sub.schedule})
+                                ⏰ {sub.timeSlot || sub.time || "Morning Rush"} ({sub.schedule || "Daily"})
                               </span>
                               
                               <div style={{ display: "flex", gap: "8px" }}>
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setToastMsg(`Subscription ${sub.id} paused successfully.`);
-                                    setTimeout(() => setToastMsg(""), 3000);
-                                  }}
+                                  onClick={() => toggleSubscriptionStatus(sub)}
                                   style={{ background: "transparent", border: "1px solid rgba(0,0,0,0.1)", padding: "4px 8px", borderRadius: "6px", fontSize: "11px", cursor: "pointer" }}
                                 >
                                   {sub.status === "Active" ? "Pause Plan" : "Resume Plan"}
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setToastMsg(`Dispatched early delivery request for ${sub.customer}!`);
-                                    setTimeout(() => setToastMsg(""), 3000);
-                                  }}
+                                  onClick={() => forceDispatchSubscription(sub)}
                                   style={{ background: "#2c1b0d", color: "#fff", border: "none", padding: "4px 8px", borderRadius: "6px", fontSize: "11px", cursor: "pointer", fontWeight: "bold" }}
                                 >
                                   Force Dispatch
@@ -2781,7 +1971,7 @@ export default function AdminDashboard() {
                           <div key={i} style={{ background: "#ffffff", padding: "16px", borderRadius: "16px", border: "1px solid rgba(44, 27, 13, 0.04)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <div>
                               <strong style={{ fontSize: "13px", display: "block" }}>{sub.customer}</strong>
-                              <span style={{ fontSize: "11.5px", color: "#555", display: "block" }}>🏢 Room: {sub.office.split(",")[1]}</span>
+                              <span style={{ fontSize: "11.5px", color: "#555", display: "block" }}>🏢 Room: {sub.office ? (sub.office.includes(",") ? sub.office.split(",")[1].trim() : sub.office) : "General Office Area"}</span>
                               <span style={{ fontSize: "12px", color: "#8a583c", fontWeight: "bold" }}>{sub.items}</span>
                               <span style={{ display: "block", fontSize: "11px", color: "#888" }}>Deliver at: {sub.timeSlot}</span>
                             </div>
@@ -2810,87 +2000,6 @@ export default function AdminDashboard() {
               );
             })()}
 
-            {activeTab === "feedback" && (
-              <div className="tab-body-wrapper">
-                <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "28px" }}>
-                  
-                  {/* Left Column: Customer Review Stream */}
-                  <div>
-                    <h3 className="section-title">Customer Review Feed</h3>
-                    <p style={{ fontSize: "12px", color: "#666", marginTop: "-12px", marginBottom: "20px" }}>Realtime feedback stream from active corporate workspaces.</p>
-                    
-                    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                      {feedbackList.map((f, i) => (
-                        <div key={i} className="queue-card-detailed-item" style={{ background: "#ffffff", padding: "20px" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", borderBottom: "1px solid rgba(0,0,0,0.03)", paddingBottom: "6px" }}>
-                            <span style={{ fontSize: "12px", fontWeight: "bold", color: "#8a583c" }}>{f.orderId}</span>
-                            <span style={{ fontSize: "11px", color: "#888" }}>{f.date}</span>
-                          </div>
-
-                          <div style={{ marginBottom: "12px" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <strong style={{ fontSize: "13.5px" }}>👤 {f.customer}</strong>
-                              <span style={{ color: "#f1c40f", fontSize: "13px", fontWeight: "bold" }}>
-                                {"★".repeat(f.rating) + "☆".repeat(5 - f.rating)} ({f.rating}/5)
-                              </span>
-                            </div>
-                            <p style={{ fontSize: "12px", color: "#444", margin: "8px 0 12px", fontStyle: "italic", background: "#fbf9f6", padding: "10px", borderRadius: "8px" }}>
-                              "{f.text}"
-                            </p>
-                          </div>
-
-                          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const rep = prompt("Write your response to " + f.customer + ":");
-                                if (rep) {
-                                  setToastMsg(`Reply dispatched to ${f.customer}: "${rep}"`);
-                                  setTimeout(() => setToastMsg(""), 3000);
-                                }
-                              }}
-                              style={{ background: "transparent", border: "1px solid rgba(0,0,0,0.1)", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", cursor: "pointer", fontWeight: "bold" }}
-                            >
-                              💬 Reply to Customer
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Right Column: Analytics */}
-                  <div>
-                    <h3 className="section-title">Rating Summary</h3>
-                    <div style={{ background: "#ffffff", padding: "24px", borderRadius: "20px", border: "1px solid rgba(44, 27, 13, 0.04)", textAlign: "center", marginBottom: "20px" }}>
-                      <span style={{ fontSize: "11px", color: "#666", textTransform: "uppercase", fontWeight: "bold", letterSpacing: "0.5px" }}>Average Rating</span>
-                      <strong style={{ fontSize: "48px", display: "block", color: "#2c1b0d", margin: "10px 0" }}>4.7 ★</strong>
-                      <span style={{ fontSize: "11.5px", color: "#27ae60", fontWeight: "bold" }}>📈 94% Positive Feedback</span>
-                    </div>
-
-                    <div style={{ background: "#ffffff", padding: "20px", borderRadius: "20px", border: "1px solid rgba(44, 27, 13, 0.04)" }}>
-                      <h4 style={{ fontSize: "12px", textTransform: "uppercase", margin: "0 0 12px", color: "#555" }}>Rating Breakdown</h4>
-                      {[
-                        { stars: 5, pct: "75%", count: 182 },
-                        { stars: 4, pct: "18%", count: 44 },
-                        { stars: 3, pct: "5%", count: 12 },
-                        { stars: 2, pct: "2%", count: 4 },
-                        { stars: 1, pct: "0%", count: 0 }
-                      ].map((item, idx) => (
-                        <div key={idx} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px", fontSize: "11px" }}>
-                          <span style={{ width: "40px", fontWeight: "bold" }}>{item.stars} Star</span>
-                          <div style={{ flex: 1, background: "rgba(0,0,0,0.04)", height: "6px", borderRadius: "3px", overflow: "hidden" }}>
-                            <div style={{ background: "#2c1b0d", width: item.pct, height: "100%" }} />
-                          </div>
-                          <span style={{ width: "30px", textAlign: "right", color: "#777" }}>{item.count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-            )}
 
             {activeTab === "leave" && (
               <div className="tab-body-wrapper">
@@ -2901,16 +2010,18 @@ export default function AdminDashboard() {
                     <h3 className="section-title">Leave Request Hub</h3>
                     
                     <form
-                      onSubmit={(e) => {
+                      onSubmit={async (e) => {
                         e.preventDefault();
                         if (!newLeaveReason || !leaveStart || !leaveEnd) return;
-                        setLeaveRequests(prev => [
-                          ...prev,
-                          { start: leaveStart, end: leaveEnd, reason: newLeaveReason, status: "Pending Approval" }
-                        ]);
-                        setNewLeaveReason("");
-                        setToastMsg("🌱 Applied for leave! Request submitted to building administrator.");
-                        setTimeout(() => setToastMsg(""), 3500);
+                        try {
+                          await addLeaveRequest({ start: leaveStart, end: leaveEnd, reason: newLeaveReason, status: "Pending Approval" });
+                          setNewLeaveReason("");
+                          setToastMsg("🌱 Applied for leave! Request submitted to building administrator.");
+                          setTimeout(() => setToastMsg(""), 3500);
+                        } catch (err) {
+                          setToastMsg("❌ Error applying leave: " + err.message);
+                          setTimeout(() => setToastMsg(""), 3500);
+                        }
                       }}
                       style={{ background: "#ffffff", padding: "24px", borderRadius: "20px", border: "1px solid rgba(44, 27, 13, 0.04)", marginBottom: "28px" }}
                     >
@@ -2948,20 +2059,23 @@ export default function AdminDashboard() {
                         </thead>
                         <tbody>
                           {leaveRequests.map((req, i) => (
-                            <tr key={i} style={{ borderBottom: i === leaveRequests.length - 1 ? "none" : "1px solid rgba(0,0,0,0.04)" }}>
+                            <tr key={req.id || i} style={{ borderBottom: i === leaveRequests.length - 1 ? "none" : "1px solid rgba(0,0,0,0.04)" }}>
                               <td style={{ padding: "12px 16px" }}>{req.start} to {req.end}</td>
                               <td style={{ padding: "12px 16px", color: "#555" }}>{req.reason}</td>
                               <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                                <span style={{
-                                  fontSize: "9.5px",
-                                  padding: "2px 6px",
-                                  borderRadius: "4px",
-                                  fontWeight: "bold",
-                                  background: req.status === "Approved" ? "rgba(39,174,96,0.1)" : "rgba(241,196,15,0.12)",
-                                  color: req.status === "Approved" ? "#27ae60" : "#d35400"
-                                }}>
-                                  {req.status}
-                                </span>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-end" }}>
+                                  <span style={{
+                                    fontSize: "9.5px",
+                                    padding: "4px 8px",
+                                    borderRadius: "4px",
+                                    fontWeight: "bold",
+                                    background: req.status === "Approved" ? "rgba(39,174,96,0.1)" : (req.status === "Rejected" ? "rgba(231,76,60,0.1)" : "rgba(241,196,15,0.12)"),
+                                    color: req.status === "Approved" ? "#27ae60" : (req.status === "Rejected" ? "#e74c3c" : "#d35400")
+                                  }}>
+                                    {req.status}
+                                  </span>
+                                  {req.adminReason && <span style={{ fontSize: "10px", color: "#666" }}>Admin Note: {req.adminReason}</span>}
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -2986,7 +2100,8 @@ export default function AdminDashboard() {
                       
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
+                          await updateProfileSettings({ workingHours });
                           setToastMsg("🌱 Successfully saved shift timings!");
                           setTimeout(() => setToastMsg(""), 3000);
                         }}
@@ -3021,8 +2136,9 @@ export default function AdminDashboard() {
                     </div>
 
                     <form
-                      onSubmit={(e) => {
+                      onSubmit={async (e) => {
                         e.preventDefault();
+                        await updateProfileSettings({ brewmasterName, brewmasterContact, brewmasterBio });
                         setToastMsg("🌱 Profile details updated successfully!");
                         setTimeout(() => setToastMsg(""), 3000);
                       }}
@@ -3064,6 +2180,53 @@ export default function AdminDashboard() {
                         SAVE IDENTITY DETAILS
                       </button>
                     </form>
+
+                    {/* Change Password Form */}
+                    <form
+                      onSubmit={handleUpdatePassword}
+                      style={{ background: "#ffffff", padding: "28px", borderRadius: "24px", border: "1px solid rgba(44, 27, 13, 0.04)", marginTop: "24px" }}
+                    >
+                      <h4 style={{ fontSize: "16px", margin: "0 0 16px", fontWeight: "bold" }}>Change Password</h4>
+                      <div className="form-group" style={{ marginBottom: "16px" }}>
+                        <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Current Password</label>
+                        <input
+                          type="password"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          required
+                          style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "13px" }}
+                        />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: "16px" }}>
+                        <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>New Password</label>
+                        <input
+                          type="password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="Min 6 characters"
+                          required
+                          style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "13px" }}
+                        />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: "16px" }}>
+                        <label style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#555" }}>Confirm New Password</label>
+                        <input
+                          type="password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          required
+                          style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid rgba(44,27,13,0.15)", fontSize: "13px" }}
+                        />
+                      </div>
+                      {passwordMessage && (
+                        <p style={{ fontSize: "12px", color: passwordMessage.includes("Error") ? "#e74c3c" : "#27ae60", marginBottom: "16px", fontWeight: "bold" }}>
+                          {passwordMessage}
+                        </p>
+                      )}
+                      <button type="submit" style={{ width: "100%", background: "#8a583c", color: "#ffffff", border: "none", padding: "12px", borderRadius: "8px", fontWeight: "800", fontSize: "12.5px", cursor: "pointer" }}>
+                        UPDATE PASSWORD
+                      </button>
+                    </form>
                   </div>
 
                   {/* Right Column: Station Configuration & Settings */}
@@ -3083,7 +2246,8 @@ export default function AdminDashboard() {
                       
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
+                          await updateProfileSettings({ shopName });
                           setToastMsg("🌱 Kitchen Station configuration updated!");
                           setTimeout(() => setToastMsg(""), 3000);
                         }}
@@ -3118,10 +2282,33 @@ export default function AdminDashboard() {
           </div>
 
           {/* FIXED RIGHT SIDEBAR (PENDING ORDERS WITH PRODUCT IMAGE & ALL DETAILS) */}
-          <aside className="dashboard-right-sidebar">
-            <div className="right-sidebar-header">
-              <h3>📥 Pending Requests</h3>
-              <span className="pending-badge-count">{pendingSidebarOrders.length} Queue</span>
+          <aside 
+            className="dashboard-right-sidebar"
+            style={{
+              transform: showPendingSidebar ? "translateX(0)" : "translateX(100%)",
+              transition: "transform 0.3s ease-in-out",
+              zIndex: 9999
+            }}
+          >
+            <div className="right-sidebar-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <h3>📥 Pending Requests</h3>
+                <span className="pending-badge-count" style={{ display: "inline-block", marginTop: "4px" }}>{pendingSidebarOrders.length} Queue</span>
+              </div>
+              <button 
+                onClick={() => setShowPendingSidebar(false)}
+                style={{ 
+                  background: "transparent", 
+                  border: "none", 
+                  fontSize: "20px", 
+                  cursor: "pointer", 
+                  color: "#e74c3c", 
+                  fontWeight: "bold",
+                  padding: "4px 8px"
+                }}
+              >
+                ✕
+              </button>
             </div>
 
             <div className="pending-orders-stack">

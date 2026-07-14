@@ -1,8 +1,21 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { getContactInfo } from "@/lib/firestore";
 
 export default function Footer() {
+  const [contact, setContact] = useState({
+    address1: "102 Tea Estate lane, Assam Garden,",
+    address2: "India 781001",
+    phone: "+91 98765 43210",
+    email: "hello@chaico.com"
+  });
+
+  useEffect(() => {
+    getContactInfo().then(setContact).catch(console.error);
+  }, []);
+
   return (
     <footer
       id="contact"
@@ -16,10 +29,10 @@ export default function Footer() {
       <div className="footer-grid">
         <div>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 24, fontWeight: 800, color: "#ffffff" }}>
-            ChaiCo.
+            {contact.brandName || "ChaiCo."}
           </div>
           <p style={{ marginTop: 14, fontSize: 13.5, opacity: 0.85, lineHeight: 1.7, maxWidth: 260 }}>
-            Freshly brewed spice teas and organic loose blends sourced straight from certified tea farms. Delivered hot and fresh.
+            {contact.brandDesc || "Freshly brewed spice teas and organic loose blends sourced straight from certified tea farms. Delivered hot and fresh."}
           </p>
         </div>
 
@@ -28,13 +41,13 @@ export default function Footer() {
             HQ Address
           </h4>
           <p style={{ fontSize: 13.5, opacity: 0.85, lineHeight: 1.8 }}>
-            102 Tea Estate lane, Assam Garden,
+            {contact.address1}
             <br />
-            India 781001
+            {contact.address2}
             <br />
-            +91 98765 43210
+            {contact.phone}
             <br />
-            hello@chaico.com
+            {contact.email}
           </p>
         </div>
 
@@ -63,34 +76,25 @@ export default function Footer() {
             Subscribe to receive brewing tips &amp; special discounts.
           </p>
           <div style={{ display: "flex", gap: 8 }}>
-            <input
-              type="email"
-              placeholder="Your Email"
-              style={{
-                background: "rgba(255, 255, 255, 0.08)",
-                border: "1px solid rgba(255, 255, 255, 0.15)",
-                borderRadius: "999px",
-                padding: "8px 16px",
-                color: "#ffffff",
-                fontSize: "12.5px",
-                outline: "none",
-                width: "100%",
-              }}
-            />
-            <button
+            <Link
+              href="/subscribe"
               style={{
                 background: "#ffffff",
                 color: "#2c1b0d",
-                border: "none",
+                textDecoration: "none",
+                display: "inline-block",
                 borderRadius: "999px",
-                padding: "8px 18px",
-                fontWeight: 700,
-                fontSize: "12.5px",
+                padding: "10px 24px",
+                fontWeight: 800,
+                fontSize: "13px",
                 cursor: "pointer",
+                width: "100%",
+                textAlign: "center",
+                transition: "all 0.2s ease"
               }}
             >
-              Join
-            </button>
+              Join Subscription
+            </Link>
           </div>
         </div>
       </div>

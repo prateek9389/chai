@@ -1,10 +1,58 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { getOrderById } from "@/lib/firestore";
 
 export default function OrderDetailPage({ params }) {
-  const orderId = params.id || "CHAI-ORD-982110";
+  const orderId = params.id;
+  const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (orderId) {
+      getOrderById(orderId)
+        .then((data) => {
+          setOrder(data);
+          setLoading(false);
+        })
+        .catch((err) => {
+          console.error(err);
+          setLoading(false);
+        });
+    } else {
+      setLoading(false);
+    }
+  }, [orderId]);
+
+  if (loading) {
+    return (
+      <div style={{ background: "#fcfaf7", minHeight: "100vh", color: "#2c1b0d", display: "flex", justifyContent: "center", alignItems: "center" }}>
+        <h2>Loading order details...</h2>
+      </div>
+    );
+  }
+
+  if (!order) {
+    return (
+      <div style={{ background: "#fcfaf7", minHeight: "100vh", color: "#2c1b0d" }}>
+        <Navbar />
+        <div style={{ padding: "120px 20px", textAlign: "center" }}>
+          <h2>Order not found</h2>
+          <p>The order ID {orderId} does not exist or has been removed.</p>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  const isReceived = true;
+  const isBrewed = ["Pending", "Shipped", "Delivered"].includes(order.status);
+  const isDispatched = ["Shipped", "Delivered"].includes(order.status);
+  const isDelivered = order.status === "Delivered";
+  
+  const dateStr = order.createdAt ? new Date(order.createdAt).toLocaleString('en-US', { month: 'long', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : "Just now";
 
   return (
     <div style={{ background: "#fcfaf7", minHeight: "100vh", color: "#2c1b0d", overflowX: "hidden" }}>
@@ -18,36 +66,43 @@ export default function OrderDetailPage({ params }) {
             <div>
               <span className="order-tag">SECURE SHIPMENT LOGS</span>
               <h2>Invoice details: {orderId}</h2>
-              <p>Placed on July 01, 2026 at 02:40 PM</p>
+              <p>Placed on {dateStr}</p>
             </div>
-            <div className="status-badge">Delivered</div>
+            <div className="status-badge" style={{ 
+              background: order.status === "Cancelled" ? "rgba(231,76,60,0.1)" : "rgba(39, 174, 96, 0.1)",
+              color: order.status === "Cancelled" ? "#e74c3c" : "#27ae60"
+            }}>
+              {order.status}
+            </div>
           </div>
 
           {/* Tracker visual */}
-          <div className="tracking-visual-card">
-            <h4>Live Shipment Status</h4>
-            <div className="stepper-track">
-              <div className="step active">
-                <span className="step-circle">✓</span>
-                <span className="step-text">Ordered</span>
-              </div>
-              <div className="track-line active" />
-              <div className="step active">
-                <span className="step-circle">✓</span>
-                <span className="step-text">Brewed</span>
-              </div>
-              <div className="track-line active" />
-              <div className="step active">
-                <span className="step-circle">✓</span>
-                <span className="step-text">Dispatched</span>
-              </div>
-              <div className="track-line active" />
-              <div className="step active">
-                <span className="step-circle">✓</span>
-                <span className="step-text">Delivered</span>
+          {order.status !== "Cancelled" && (
+            <div className="tracking-visual-card">
+              <h4>Live Shipment Status</h4>
+              <div className="stepper-track">
+                <div className={`step ${isReceived ? "active" : ""}`}>
+                  <span className="step-circle">{isReceived ? "✓" : "1"}</span>
+                  <span className="step-text">Ordered</span>
+                </div>
+                <div className={`track-line ${isBrewed ? "active" : ""}`} />
+                <div className={`step ${isBrewed ? "active" : ""}`}>
+                  <span className="step-circle">{isBrewed ? "✓" : "2"}</span>
+                  <span className="step-text">Brewed</span>
+                </div>
+                <div className={`track-line ${isDispatched ? "active" : ""}`} />
+                <div className={`step ${isDispatched ? "active" : ""}`}>
+                  <span className="step-circle">{isDispatched ? "✓" : "3"}</span>
+                  <span className="step-text">Dispatched</span>
+                </div>
+                <div className={`track-line ${isDelivered ? "active" : ""}`} />
+                <div className={`step ${isDelivered ? "active" : ""}`}>
+                  <span className="step-circle">{isDelivered ? "✓" : "4"}</span>
+                  <span className="step-text">Delivered</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* 2-Column Split: Summary | Address */}
           <div className="detail-grid">
@@ -58,31 +113,38 @@ export default function OrderDetailPage({ params }) {
               <div className="invoice-items-list">
                 <div className="item-row">
                   <div>
-                    <strong>Cardamom (Elaichi) Chai</strong>
-                    <p style={{ margin: "2px 0 0", fontSize: "11.5px", color: "#777" }}>Milk: Whole | Sugar: Normal</p>
+                    <strong>{order.item}</strong>
+                    <p style={{ margin: "2px 0 0", fontSize: "11.5px", color: "#777" }}>Milk: {order.milk} | Sugar: {order.sugar}</p>
                   </div>
-                  <strong>₹169</strong>
+                  <strong>-</strong>
                 </div>
 
-                <div className="item-row">
-                  <div>
-                    <strong>Cardamom Crispy Rusk Pack (Add-on)</strong>
-                    <p style={{ margin: "2px 0 0", fontSize: "11.5px", color: "#777" }}>1x side accompaniment</p>
+                {order.addons && order.addons !== "None" && order.addons !== "" && (
+                  <div className="item-row">
+                    <div>
+                      <strong>Add-ons: {order.addons}</strong>
+                    </div>
+                    <strong>-</strong>
                   </div>
-                  <strong>₹45</strong>
-                </div>
+                )}
 
                 <div className="breakdown-total-row">
                   <span>Subtotal:</span>
-                  <span>₹214</span>
+                  <span>{order.total}</span>
                 </div>
                 <div className="breakdown-total-row">
                   <span>Express Delivery:</span>
                   <span>Free</span>
                 </div>
+                {order.coupon && order.coupon !== "None" && order.coupon !== "" && (
+                  <div className="breakdown-total-row">
+                    <span>Coupon Applied:</span>
+                    <span>{order.coupon}</span>
+                  </div>
+                )}
                 <div className="breakdown-total-row final">
                   <span>Total Amount Paid:</span>
-                  <span style={{ color: "#8a583c", fontSize: "18px", fontWeight: "900" }}>₹214</span>
+                  <span style={{ color: "#8a583c", fontSize: "18px", fontWeight: "900" }}>{order.total}</span>
                 </div>
               </div>
             </div>
@@ -92,16 +154,16 @@ export default function OrderDetailPage({ params }) {
               <h3 className="section-title">Shipping & Delivery Address</h3>
               
               <div className="address-box-display">
-                <p>👤 <strong>Receiver Name:</strong> Royal Tea Aficionado</p>
-                <p>📞 <strong>Phone:</strong> +91 98765 43210</p>
+                <p>👤 <strong>Receiver Name:</strong> {order.customer || "N/A"}</p>
+                <p>📞 <strong>Phone:</strong> {order.phone || "N/A"}</p>
                 <p>📍 <strong>Delivery Address:</strong></p>
                 <p className="full-address-text">
-                  Palace Square Vista, Block 4-C, Pincode 302001, Jaipur, Rajasthan, India
+                  {order.office || "N/A"} {order.pincode ? ` - ${order.pincode}` : ""}
                 </p>
               </div>
 
               <div style={{ marginTop: "24px", background: "rgba(138, 88, 60, 0.08)", padding: "14px", borderRadius: "10px", fontSize: "12.5px" }}>
-                <span>🛡️ Payment secured via <strong>UPI Instant Merchant Transfer</strong>. TransID: TXN-73921804.</span>
+                <span>🛡️ Payment secured via <strong>UPI Instant Merchant Transfer</strong>. TransID: {order.id}.</span>
               </div>
             </div>
 
